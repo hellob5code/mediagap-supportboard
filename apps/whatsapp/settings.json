@@ -1,0 +1,65 @@
+[
+  {
+    "type": "multi-input",
+    "id": "whatsapp-twilio",
+    "title": "Twilio settings",
+    "content": "Enter your Twilio account settings information.",
+    "help": "https://board.support/docs/#whatsapp",
+    "value": [
+      {
+        "type": "text",
+        "id": "whatsapp-twilio-user",
+        "title": "Account SID"
+      },
+      {
+        "type": "password",
+        "id": "whatsapp-twilio-token",
+        "title": "Token"
+      },
+      {
+        "type": "text",
+        "id": "whatsapp-twilio-sender",
+        "title": "Sender number"
+      },
+      {
+        "type": "button",
+        "id": "whatsapp-twilio-btn",
+        "title": "Configuration URL",
+        "button-text": "Get configuration URL",
+        "button-url": "#"
+      }
+    ]
+  },
+  {
+    "type": "multi-input",
+    "id": "whatsapp-sms",
+    "title": "Text message fallback",
+    "content": "Sends a text message if sending of the WhatsApp message fails. You can use text and the following merge fields: {conversation_url_parameter}, {message}, {recipient_name}, {recipient_email}.",
+    "help": "https://board.support/docs/#whatsapp-fallback",
+    "value": [
+      {
+        "type": "checkbox",
+        "id": "whatsapp-sms-active",
+        "title": "Active"
+      },
+      {
+        "type": "textarea",
+        "id": "whatsapp-sms-template",
+        "title": "Message template"
+      }
+    ]
+  },
+  {
+    "type": "textarea",
+    "id": "whatsapp-template",
+    "title": "Template fallback",
+    "content": "Sends a WhatsApp Template notification if sending of the WhatsApp message fails. You can use text and the following merge fields: {conversation_url_parameter}, {recipient_name}, {recipient_email}.",
+    "help": "https://board.support/docs/#whatsapp-fallback"
+  },
+  {
+    "type": "number",
+    "id": "whatsapp-department",
+    "title": "Department ID",
+    "content": "Assign a departments to all conversations started from WhatsApp. Insert the department ID."
+  }
+]

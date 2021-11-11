@@ -1,0 +1,39 @@
+[
+  {
+    "type": "multi-input",
+    "id": "sms-twilio",
+    "title": "Twilio SMS settings",
+    "content": "Enter your Twilio account settings information.",
+    "help": "https://board.support/docs/#whatsapp",
+    "value": [
+      {
+        "type": "text",
+        "id": "sms-twilio-user",
+        "title": "Account SID"
+      },
+      {
+        "type": "password",
+        "id": "sms-twilio-token",
+        "title": "Token"
+      },
+      {
+        "type": "text",
+        "id": "sms-twilio-sender",
+        "title": "Messaging Service SID"
+      },
+      {
+        "type": "button",
+        "id": "sms-twilio-btn",
+        "title": "Configuration URL",
+        "button-text": "Get configuration URL",
+        "button-url": "#"
+      }
+    ]
+  },
+  {
+    "type": "number",
+    "id": "sms-department",
+    "title": "Department ID",
+    "content": "Assign a departments to all conversations started from SMS. Insert the department ID."
+  }
+]
