@@ -83,12 +83,20 @@ body {
 .sb-admin-box {
     border: none;
 
-    &.sb-rich-login {
+    .sb-bottom {
+        display: block;
+
+        div {
+            margin: 10px 0 0 0 !important;
+        }
+    }
+
+    &.sb-rich-login, &.sb-cloud-box {
         .sb-input {
             display: block;
 
             input {
-                margin-top: 10px;
+                margin-top: 10px !important;
             }
         }
     }
@@ -98,7 +106,7 @@ body {
     width: 100%;
     padding: 0;
     background: $white;
-    -webkit-tap-highlight-color: #96c1e370;
+    -webkit-tap-highlight-color: rgba(150, 194, 227, 0.44);
     user-select: auto;
 
     > main {
@@ -121,7 +129,7 @@ body {
 
     .sb-profile-edit-box .sb-btn, .sb-profile-box .sb-btn {
         user-select: auto;
-        -webkit-tap-highlight-color: #96c1e370;
+        -webkit-tap-highlight-color: rgba(150, 194, 227, 0.44);
     }
 
     .sb-top-bar .sb-btn.sb-icon {
@@ -134,7 +142,7 @@ body {
         background: none;
         border-radius: 4px;
         user-select: auto;
-        -webkit-tap-highlight-color: #96c1e370;
+        -webkit-tap-highlight-color: rgba(150, 194, 227, 0.44);
 
         &:before {
             color: $color-blue !important;
@@ -290,14 +298,12 @@ body {
 main > div .sb-top-bar .sb-menu-mobile > ul {
     top: 73px;
 }
-
 /*
 
 # FONT SIZE
 ==========================================================
 
 */
-
 div ul.sb-menu li, .sb-select ul li {
     font-size: 17px;
     line-height: 27px;
@@ -373,14 +379,12 @@ div ul.sb-menu li, .sb-select ul li {
 .sb-tab-nav-title {
     font-size: 17px !important;
 }
-
 /*
 
 # TOP HEADER
 ==========================================================
 
 */
-
 .sb-admin {
     width: 100%;
     padding: 0 !important;
@@ -472,14 +476,12 @@ div ul.sb-menu li, .sb-select ul li {
         }
     }
 }
-
 /*
 
 # COMPONENTS
 ==========================================================
 
 */
-
 .sb-admin {
 
     .sb-menu-wide > div:after, .sb-table-users th:first-child:after, .sb-nav > div:after {
@@ -712,14 +714,12 @@ div ul.sb-menu li, .sb-select ul li {
         padding-top: 35px;
     }
 }
-
 /*
 
 # LIGHTBOX AND POPUP
 ==========================================================
 
 */
-
 .sb-lightbox:not(.sb-loading):not(.sb-loading-global) {
     width: 100%;
     left: 0;
@@ -831,14 +831,12 @@ div ul.sb-menu li, .sb-select ul li {
         left: 95px;
     }
 }
-
 /*
 
 # CONVERSATIONS AREA
 ==========================================================
 
 */
-
 .sb-board {
     display: block;
 
@@ -1036,14 +1034,12 @@ div ul.sb-menu li, .sb-select ul li {
     top: -1px;
     right: 50px;
 }
-
 /*
 
 # USERS AREA
 ==========================================================
 
 */
-
 .sb-area-users {
 
     .sb-top-bar {
@@ -1187,14 +1183,12 @@ div ul.sb-menu li, .sb-select ul li {
         height: 12px;
     }
 }
-
 /*
 
 # SETTINGS AREA
 ==========================================================
 
 */
-
 .sb-setting input, .sb-setting select, .sb-setting textarea, .sb-input-setting input, .sb-input-setting select, .sb-input-setting textarea {
     min-width: 0;
     font-size: 17px;
@@ -1293,14 +1287,12 @@ div ul.sb-menu li, .sb-select ul li {
         }
     }
 }
-
 /*
 
 # REPORTS AREA
 ==========================================================
 
 */
-
 .sb-area-reports {
 
     > .sb-tab > .sb-content {
@@ -1347,14 +1339,12 @@ div ul.sb-menu li, .sb-select ul li {
 .daterangepicker .drp-calendar {
     max-width: none;
 }
-
 /*
 
 # MORE
 ==========================================================
 
 */
-
 .sb-direct-message-box .sb-bottom {
     display: flex !important;
 

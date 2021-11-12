@@ -9,12 +9,98 @@
  *
  */
 
-require_once('functions.php');
+// SMS
+if (isset($_POST['AccountSid']) && isset($_POST['From'])) {
+    require('functions.php');
+
+    // User and conversation
+    $GLOBALS['SB_FORCE_ADMIN'] = true;
+    if ($_POST['AccountSid'] != sb_get_multi_setting('sms', 'sms-user')) sb_api_error(new SBError('security-error', '', 'Wrong AccountSid.'));
+    $phone = $_POST['From'];
+    $message = $_POST['Body'];
+    $user = sb_get_user_by('phone', $phone);
+    $conversation_id = false;
+    if (!$user) {
+        $extra = ['phone' => [$phone, 'Phone']];
+        if (!empty($_POST['FromCity'])) {
+            $extra['city'] = [ucwords(mb_strtolower($_POST['FromCity'])), 'City'];
+        }
+        if (!empty($_POST['FromCountry'])) {
+            $country_codes = json_decode(file_get_contents(SB_PATH . '/resources/json/countries.json'), true);
+            $code = strtoupper($_POST['FromCountry']);
+            if (isset($country_codes[$code])) {
+                $extra['country'] = [$country_codes[$code], 'Country'];
+            }
+        }
+        if ($message && sb_get_multi_setting('dialogflow-language-detection', 'dialogflow-language-detection-active')) {
+            $detected_language = sb_google_language_detection($message);
+            if (!empty($detected_language)) $extra['language'] = [$detected_language, 'Language'];
+        }
+        $user_id = sb_add_user([], $extra);
+        $user = sb_get_user($user_id);
+    } else {
+        $user_id = $user['id'];
+        $conversation_id = sb_isset(sb_db_get('SELECT id FROM sb_conversations WHERE user_id = ' . $user_id . ' ORDER BY id DESC LIMIT 1'), 'id');
+    }
+    $GLOBALS['SB_LOGIN'] = $user;
+
+    // Attachments
+    $attachments = [];
+    for ($i = 0; $i < 10; $i++) {
+        $url = sb_isset($_POST, 'MediaUrl' . $i);
+    	if ($url && isset($_POST['MediaContentType' . $i])) {
+            switch ($_POST['MediaContentType0']) {
+                case 'video/mp4':
+                    $extension = '.mp4';
+                    break;
+                case 'image/gif':
+                    $extension = '.gif';
+                    break;
+                case 'image/png':
+                    $extension = '.png';
+                    break;
+                case 'image/jpg':
+                case 'image/jpeg':
+                    $extension = '.jpg';
+                    break;
+                case 'image/webp':
+                    $extension = '.webp';
+                    break;
+                case 'audio/ogg':
+                    $extension = '.ogg';
+                    break;
+                case 'audio/mpeg':
+                    $extension = '.mp3';
+                    break;
+                case 'audio/amr':
+                    $extension = '.amr';
+                    break;
+                case 'application/pdf':
+                    $extension = '.pdf';
+                    break;
+            }
+            if ($extension) {
+                $file_name = basename($url) . $extension;
+                array_push($attachments, [$file_name, sb_download_file($url, $file_name)]);
+            }
+        }
+    }
+
+    // Send message to Support Board
+    if (!$conversation_id) $conversation_id = sb_isset(sb_new_conversation($user_id, 2, '', false, -1, 'tm'), 'details', [])['id'];
+    sb_send_message($user_id, $conversation_id, $message, $attachments, 2);
+    $GLOBALS['SB_FORCE_ADMIN'] = false;
+    die();
+}
+
+// API
+if (!isset($_POST['function'])) die(json_encode(['status' => 'error', 'response' => 'missing-function-name', 'message' => 'Function name is required. Get it from the docs.']));
+require('functions.php');
 define('SB_API', true);
 sb_process_api();
 
 function sb_process_api() {
-    $function_name = '';
+    $function_name = $_POST['function'];
     $functions = [
         'is-online' => ['user_id'],
         'get-setting' => ['setting'],
@@ -127,16 +213,10 @@ function sb_process_api() {
         'automations-validate' => ['automation'],
         'email-piping' => [],
         'get-agents-in-conversation' => ['conversation_id']
-
     ];
 
-    if (!isset($_POST['function'])) {
-        sb_api_error(new SBError('missing-function-name', '', 'Function name is required. Get it from the docs.'));
-    } else {
-        $function_name = $_POST['function'];
-        if (!isset($functions[$function_name])) {
-            sb_api_error(new SBError('function-not-found', $function_name, 'Function ' . $function_name . ' not found. Check the function name.'));
-        }
+    if (!isset($functions[$function_name])) {
+        sb_api_error(new SBError('function-not-found', $function_name, 'Function ' . $function_name . ' not found. Check the function name.'));
     }
 
     if (!isset($_POST['token'])) {

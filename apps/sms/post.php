@@ -14,7 +14,7 @@ require_once('../../include/functions.php');
 
 
 function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
-    
+
     $settings = sb_get_setting('sms-twilio');
     $to = trim($to);
     $from = trim($from);
@@ -50,6 +50,7 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
     $response = sb_curl($url, '', $header, 'GET');
     $response = json_decode($response, true);
 
+
     $user = sb_get_user_by('phone', $to);
     $to_user_id = $user['id'];
     // $responseTo = [];
@@ -74,11 +75,13 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
     return $response;
 }
 
+
 function insert_history_data_to_message($history_data, $conversation_id) {
     for($i = 0; $i < count($history_data); $i++) {
         sb_db_query('INSERT INTO sb_messages(user_id, message, creation_time, status_code, attachments, payload, conversation_id) VALUES ("' . $history_data[$i]->user_id . '", "' . sb_db_escape($history_data[$i]->body) . '", "' . $history_data[$i]->date_sent . '", 0, "", "", "' . $conversation_id . '")', true);
     }
 }
+
 
 if ($raw) {
     $raw = explode('&', urldecode($raw));
@@ -164,6 +167,7 @@ if ($raw) {
                     $extension = '.pdf';
                     break;
             }
+
             if ($extension) {
                 $file_name = basename($response['MediaUrl0']) . $extension;
                 array_push($attachments, [$file_name, sb_download_file($response['MediaUrl0'], $file_name)]);
@@ -175,7 +179,6 @@ if ($raw) {
 
         // Dialogflow, Notifications, Bot messages
         $response_extarnal = sb_messaging_platforms_functions($conversation_id, $message, $attachments, $user, ['source' => 'sm', 'phone' => $phone]);
-
         $GLOBALS['SB_FORCE_ADMIN'] = false;
     } else if ($error === 470) {
         $phone = $response['To'];

@@ -31,6 +31,11 @@
       },
       {
         "type": "number",
+        "name": "Instagram ID",
+        "id": "messenger-instagram-id"
+      },
+      {
+        "type": "number",
         "name": "Department ID",
         "id": "messenger-page-department"
       }

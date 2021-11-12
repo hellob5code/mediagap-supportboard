@@ -10,18 +10,23 @@
  */
 
 /* Plugin folder url */
+// define('SB_URL', 'https://supportboard.medigaplife.com');
 define('SB_URL', 'http://dev.supportboard.com');
 
 /* The name of the database */
+// define('SB_DB_NAME', 'supportboard');
 define('SB_DB_NAME', 'supportboard');
 
 /* MySQL database username */
+// define('SB_DB_USER', 'seadadmin');
 define('SB_DB_USER', 'root');
 
 /* MySQL database password */
+// define('SB_DB_PASSWORD', 'lcGhCqUXEVSnBN93');
 define('SB_DB_PASSWORD', 'root');
 
 /* MySQL hostname */
+// define('SB_DB_HOST', 'mglcrmv2-instance-2-cluster.cluster-cuhaxuhcdrn4.us-east-1.rds.amazonaws.com');
 define('SB_DB_HOST', '127.0.0.1');
 
 /* MySQL port (optional) */

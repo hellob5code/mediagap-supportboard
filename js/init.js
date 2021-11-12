@@ -54,13 +54,9 @@
                 var head = document.getElementsByTagName('head')[0];
                 sbCreateStyle(url + '/css/min/' + (tickets ? 'tickets' : 'main') + '.min.css', head);
                 sbCreateScript(url + '/js/main.js', head);
-
-                if (tickets) {
-                    sbCreateScript(url + '/apps/tickets/tickets.js', head);
-                }
             };
             xhr.onerror = function () {
-                console.log('Support Board: Init Error - CORS error.');
+                console.log('Support Board init cors error.');
             };
             xhr.send();
         }

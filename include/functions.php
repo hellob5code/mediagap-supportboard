@@ -9,7 +9,7 @@
  *
  */
 
-define('SB_VERSION', '3.3.6');
+define('SB_VERSION', '3.3.7');
 
 if (!defined('SB_PATH')) {
     $path = dirname(__DIR__, 1);
@@ -386,7 +386,7 @@ function sb_update_login($profile_image, $first_name, $last_name, $email, $depar
     $settings['last_name'] = $last_name;
     $settings['email'] = $email;
     $settings['department'] = $department == 'NULL' || $department == '' || $department === false ? null : $department;
-    if ($user_type != false) {
+    if ($user_type) {
         $settings['user_type'] = $user_type;
     }
     if (!headers_sent()) {
@@ -433,14 +433,18 @@ function sb_get_active_user($login_data = false, $database = false, $login_app =
                     $return = sb_wp_get_active_user($login_app_data);
                 }
             }
-        }
-        if (defined('SB_PERFEX') && $app == 'perfex') {
+        } else if ($app == 'default' && (!$return || sb_isset($return, 'email') != sb_isset($login_app_data, 'email'))) {
+            $return = sb_add_user_and_login($login_app_data, sb_isset($login_app_data, 'extra', []), false);
+            if (sb_is_validation_error($return) && $return->error == 'duplicate-email' && !empty($login_app_data['password'])) {
+                $active_user = sb_db_get('SELECT id, token FROM sb_users WHERE password = "' . sb_db_escape($login_app_data['password']) . '" AND email = "' . sb_isset($login_app_data, 'email', '') . '" LIMIT 1');
+                $return = $active_user ? sb_login('', '', $active_user['id'], $active_user['token']) : false;
+            }
+            $return = is_array($return) ? array_merge($return[0], ['cookie' => $return[1]]) : false;
+        } else if (defined('SB_PERFEX') && $app == 'perfex') {
             $return = sb_perfex_get_active_user_function($return, $login_app_data);
-        }
-        if (defined('SB_WHMCS') && $app == 'whmcs') {
+        } else if (defined('SB_WHMCS') && $app == 'whmcs') {
             $return = sb_whmcs_get_active_user_function($return, $login_app_data);
-        }
-        if (defined('SB_AECOMMERCE') && $app == 'aecommerce') {
+        } else if (defined('SB_AECOMMERCE') && $app == 'aecommerce') {
             $return = sb_aecommerce_get_active_user_function($return, $login_app_data);
         }
     }
@@ -532,9 +536,11 @@ function sb_js_global() {
 function sb_js_admin() {
     $active_user = sb_get_active_user();
     $active_user_type = $active_user ? $active_user['user_type'] : false;
+    $language = sb_get_admin_language();
     $settings = [
         'bot-id' => sb_get_bot_id(),
         'close-message' => sb_get_multi_setting('close-message', 'close-active'),
+        'close-message-transcript' => sb_get_multi_setting('close-message', 'close-transcript'),
         'routing' => (!$active_user || $active_user_type == 'agent') && (sb_get_multi_setting('queue', 'queue-active') || sb_get_setting('routing') || sb_get_multi_setting('agent-hide-conversations', 'agent-hide-conversations-active')),
         'desktop-notifications' => sb_get_setting('desktop-notifications'),
         'push-notifications' => sb_get_multi_setting('push-notifications', 'push-notifications-active'),
@@ -556,6 +562,7 @@ function sb_js_admin() {
         'slack-active' => sb_get_setting('slack-active'),
         'translation' => sb_get_setting('google-translation'),
         'active-agent-language' => sb_get_user_language(),
+        'transcript-message' => sb_get_multi_setting('transcript', 'transcript-message', ''),
         'cloud' => defined('SB_CLOUD')
     ];
     $code = '<script>';
@@ -592,8 +599,8 @@ function sb_js_admin() {
         $settings['cloud'] = ['email' => $cookie_cloud['email'], 'id' => sb_db_get('SELECT id FROM sb_users WHERE email = "' . $cookie_cloud['email'] . '"')['id'], 'cloud_user_id' => $cookie_cloud['user_id']];
     }
     $code .= 'var SB_LANGUAGE_CODES = ' . file_get_contents(SB_PATH . '/resources/languages/language-codes.json') . ';';
-    $code .= 'var SB_ADMIN_SETTINGS = ' . json_encode($settings) .';';
-    $code .= 'var SB_TRANSLATIONS = ' . json_encode(sb_get_current_translations(), JSON_INVALID_UTF8_IGNORE) . ';';
+    $code .= 'var SB_ADMIN_SETTINGS = ' . json_encode($settings) . ';';
+    $code .= 'var SB_TRANSLATIONS = ' . ($language && $language != 'en' ? file_get_contents(SB_PATH . '/resources/languages/admin/js/' . $language . '.json') : '[]') . ';';
     $code .= 'var SB_VERSIONS = { sb: "' . SB_VERSION . '", dialogflow: "' . (defined('SB_DIALOGFLOW') ? SB_DIALOGFLOW : -1) . '", slack: "' . (defined('SB_SLACK') ? SB_SLACK : -1) . '", tickets: "' . (defined('SB_TICKETS') ? SB_TICKETS : -1) . '", perfex: "' . (defined('SB_PERFEX') ? SB_PERFEX : -1) . '", whmcs: "' . (defined('SB_WHMCS') ? SB_WHMCS : -1) . '", woocommerce: "' . (defined('SB_WOOCOMMERCE') ? SB_WOOCOMMERCE : -1) . '", ump: "' . (defined('SB_UMP') ? SB_UMP : -1) . '", aecommerce: "' . (defined('SB_AECOMMERCE') ? SB_AECOMMERCE : -1) . '", messenger: "' . (defined('SB_MESSENGER') ? SB_MESSENGER : -1)  . '", whatsapp: "' . (defined('SB_WHATSAPP') ? SB_WHATSAPP : -1) . '", sms: "' . (defined('SB_SMS') ? SB_WHATSAPP : -1) . '", armember: "' . (defined('SB_ARMEMBER') ? SB_ARMEMBER : -1) . '"};';
     $code .= '</script>';
     echo $code;
@@ -647,13 +654,14 @@ function sb_add_user($settings = [], $settings_extra = [], $hash_password = true
     }
     if (!empty($settings['email']))  {
         $settings['email'] = sb_db_escape($settings['email']);
-        if (intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users WHERE email = "' . $settings['email'] . '"')['count']) > 0) {
-            if (sb_get_setting('duplicate-emails')) {
+        $existing_email = sb_db_get('SELECT user_type FROM sb_users WHERE email = "' . $settings['email'] . '" LIMIT 1');
+        if ($existing_email) {
+            if (sb_get_setting('duplicate-emails') && !sb_is_agent($existing_email['user_type'])) {
                 sb_db_query('UPDATE sb_users SET email = NULL WHERE email = "' . $settings['email'] . '"');
             } else return new SBValidationError('duplicate-email');
         }
     }
-    if (!empty($settings_extra['phone']) && sb_get_user_by('phone', $settings_extra['phone'][0])) {
+    if (!empty($settings_extra['phone']) && sb_get_user_by('phone', $settings_extra['phone'][0]) && !sb_get_setting('duplicate-emails')) {
         return new SBValidationError('duplicate-phone');
     }
     if (empty($settings['profile_image'])) {
@@ -770,12 +778,16 @@ function sb_update_user($user_id, $settings, $settings_extra = [], $hash_passwor
     $active_user = sb_get_active_user();
     $query = '';
 
-    if ($email && intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users WHERE email = "' . sb_db_escape($email) . '" AND id <> ' . sb_db_escape($user_id))['count']) > 0) {
-        if (sb_get_setting('duplicate-emails')) {
-            sb_db_query('UPDATE sb_users SET email = NULL WHERE email = "' . sb_db_escape($settings['email']) . '"');
-        } else return new SBValidationError('duplicate-email');
+    if ($email) {
+        $email = sb_db_escape($email);
+        $existing_email = sb_db_get('SELECT user_type FROM sb_users WHERE email = "' . $email . '" AND id <> ' . sb_db_escape($user_id));
+        if ($existing_email) {
+            if (sb_get_setting('duplicate-emails') && !sb_is_agent($existing_email['user_type'])) {
+                sb_db_query('UPDATE sb_users SET email = NULL WHERE email = "' . $email . '"');
+            } else return new SBValidationError('duplicate-email');
+        }
     }
-    if (!empty($settings_extra['phone']) && intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users_data WHERE slug = "phone" AND (value = "' . $settings_extra['phone'][0] . '"' . (strpos($settings_extra['phone'][0], '+') !== false ? (' OR value = "' . str_replace('+', '00', $settings_extra['phone'][0]) . '"') : '') . ') AND user_id <> ' . sb_db_escape($user_id))['count']) > 0) {
+    if (!empty($settings_extra['phone']) && intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users_data WHERE slug = "phone" AND (value = "' . $settings_extra['phone'][0] . '"' . (strpos($settings_extra['phone'][0], '+') !== false ? (' OR value = "' . str_replace('+', '00', $settings_extra['phone'][0]) . '"') : '') . ') AND user_id <> ' . sb_db_escape($user_id))['count']) > 0 && !sb_get_setting('duplicate-emails')) {
         return new SBValidationError('duplicate-phone');
     }
 
@@ -1004,7 +1016,7 @@ function sb_get_agent($agent_id) {
                 $country = $user['details'][$i]['value'];
                 $countries = json_decode(file_get_contents(SB_PATH . '/resources/json/countries.json'), true);
                 $user['country_code'] = $countries[$country];
-                if (isset($countries[$country]) && file_exists(SB_PATH . '/media/flags/countries/' . strtolower($countries[$country]) . '.png')) {
+                if (isset($countries[$country]) && file_exists(SB_PATH . '/media/flags/' . strtolower($countries[$country]) . '.png')) {
                     $user['flag'] = strtolower($countries[$country]) . '.png';
                 }
                 break;
@@ -1274,11 +1286,11 @@ function sb_update_users_last_activity($user_id = -1, $return_user_id = -1, $che
 }
 
 function sb_is_online($datetime) {
-    return strtotime($datetime) > strtotime(gmdate('Y-m-d H:i:s', time() - 15));
+    return strtotime($datetime) > strtotime(gmdate('Y-m-d H:i:s', time() - 30));
 }
 
 function sb_agents_online() {
-    $online = $online = sb_pusher_active() ? sb_pusher_agents_online() : intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users WHERE (user_type = "agent" OR user_type = "admin") AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 15) . '"')['count']) > 0;
+    $online = $online = sb_pusher_active() ? sb_pusher_agents_online() : intval(sb_db_get('SELECT COUNT(*) as count FROM sb_users WHERE (user_type = "agent" OR user_type = "admin") AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 30) . '"')['count']) > 0;
     return $online ? true : (defined('SB_SLACK') ? sb_slack_presence() == 'online' : false);
 }
 
@@ -1304,7 +1316,7 @@ function sb_get_online_user_ids($agents = false) {
             }
         }
     } else {
-        $users = sb_db_get($query . ' AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 15) . '"', false);
+        $users = sb_db_get($query . ' AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 30) . '"', false);
         for ($i = 0; $i < count($users); $i++) {
             array_push($user_ids, $users[$i]['id']);
         }
@@ -1314,21 +1326,20 @@ function sb_get_online_user_ids($agents = false) {
 
 function sb_is_user_online($user_id) {
     if (empty($user_id)) return false;
-    $response = false;
     $user = sb_db_get('SELECT last_activity, user_type FROM sb_users WHERE id = ' . sb_db_escape($user_id));
     if (isset($user['last_activity']) && sb_is_online($user['last_activity'])) {
-        $response = true;
+        return true;
     }
-    if (!$response && defined('SB_SLACK') && isset($user['user_type']) && sb_is_agent($user['user_type'])) {
-        $response = sb_slack_presence($user_id) == 'online';
+    if (defined('SB_SLACK') && isset($user['user_type']) && sb_is_agent($user['user_type'])) {
+        return sb_slack_presence($user_id) == 'online';
     }
-    if (!$response && sb_pusher_active()) {
+    if (sb_pusher_active()) {
         $users = sb_pusher_get_online_users();
         for ($i = 0; $i < count($users); $i++) {
             if ($users[$i]->id == $user_id) return true;
         }
     }
-    return $response;
+    return false;
 }
 
 function sb_get_user_by($by, $value) {
@@ -1390,7 +1401,7 @@ function sb_get_conversations_users($conversations) {
             $code .= sb_db_escape($conversations[$i]['conversation_id']) . ',';
         }
         $code = substr($code, 0, -1) . ')';
-        $result = sb_db_get('SELECT sb_users.id, sb_users.first_name, sb_users.last_name, sb_users.profile_image, sb_users.user_type, sb_conversations.id AS `conversation_id`, sb_conversations.status_code, sb_conversations.title, sb_conversations.source FROM sb_users, sb_conversations WHERE sb_users.id = sb_conversations.user_id AND sb_conversations.id IN ' . $code, false);
+        $result = sb_db_get('SELECT sb_users.id, sb_users.first_name, sb_users.last_name, sb_users.profile_image, sb_users.user_type, sb_conversations.id AS `conversation_id`, sb_conversations.status_code, sb_conversations.title, sb_conversations.agent_id, sb_conversations.source FROM sb_users, sb_conversations WHERE sb_users.id = sb_conversations.user_id AND sb_conversations.id IN ' . $code, false);
         for ($i = 0; $i < count($conversations); $i++) {
             $conversation_id = $conversations[$i]['conversation_id'];
             for ($j = 0; $j < count($result); $j++) {
@@ -1546,7 +1557,7 @@ function sb_update_conversation_department($conversation_id, $department, $messa
     if ($response) {
         if ($message) {
             $recipients = $empty_department ? 'agents' : ('department-' . $department);
-            sb_send_agents_notifications($recipients, $message, str_replace('{name}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {name} assigned this conversation to your department.')), $conversation_id, false, false, $department, ['force' => true]);
+            sb_send_agents_notifications($recipients, $message, str_replace('{T}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {T} assigned this conversation to your department.')), $conversation_id, false, false, $department, ['force' => true]);
         }
         sb_update_conversation_event('conversation-department-update-' . $department, $conversation_id, $message);
         return true;
@@ -1565,7 +1576,7 @@ function sb_update_conversation_agent($conversation_id, $agent_id, $message = fa
     $response = sb_db_query('UPDATE sb_conversations SET agent_id = ' . ($empty_agent_id ? 'NULL' : sb_db_escape($agent_id)) . ' WHERE id = '. $conversation_id);
     if ($response) {
         if ($message) {
-            sb_send_agents_notifications($agent_id, $message, $empty_agent_id ? '' : str_replace('{name}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {name} assigned this conversation to you.')), $conversation_id, false, false, false, ['force' => true]);
+            sb_send_agents_notifications($agent_id, $message, $empty_agent_id ? '' : str_replace('{T}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {T} assigned this conversation to you.')), $conversation_id, false, false, false, ['force' => true]);
         }
         if (!$empty_agent_id) sb_update_conversation_event('conversation-agent-update-' . $agent_id, $conversation_id, $message);
         return true;
@@ -1726,7 +1737,7 @@ function sb_send_agents_notifications($recipients, $message, $bottom_message = f
     if (!$is_online) {
         if ($force || sb_get_setting('notify-agent-email')) sb_email_create($recipients, $user_name, $user['profile_image'], (isset($extra['email']) ? $extra['email'] : $message) . ($bottom_message ? ('<br><br><span style="color:#a8a8a8;font-size:12px;">' . $bottom_message . '</span>') : ''), $attachments, $department, $conversation_id);
         if ($force || sb_get_multi_setting('sms', 'sms-active-agents')) {
-            sb_send_sms($message, $recipient_id ? $recipient_id : $recipients, true, $conversation_id);
+            sb_send_sms($message, $recipient_id ? $recipient_id : $recipients, true, $conversation_id, $attachments);
         }
     }
     if ($force || sb_get_multi_setting('push-notifications', 'push-notifications-active')) {
@@ -1813,7 +1824,7 @@ function sb_queue($conversation_id, $department = -1) {
                     }
                 }
             }
-            $smaller = sb_db_get('SELECT id FROM sb_users WHERE user_type = "agent"' . ($query == '' ? '' : ' AND id NOT IN (' . substr($query, 0, -1) . ')') . ($pusher ? '' : ' AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 15) . '"') . ($department != -1 ? ' AND department = ' . $department : '' ) . ' LIMIT 1');
+            $smaller = sb_db_get('SELECT id FROM sb_users WHERE user_type = "agent"' . ($query == '' ? '' : ' AND id NOT IN (' . substr($query, 0, -1) . ')') . ($pusher ? '' : ' AND last_activity > "' . gmdate('Y-m-d H:i:s', time() - 30) . '"') . ($department != -1 ? ' AND department = ' . $department : '' ) . ' LIMIT 1');
             if (empty($smaller)) {
                 $smaller = false;
             } else {
@@ -1901,7 +1912,7 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
         $user_id = $user['id'];
         $is_sender_agent = sb_is_agent($sender);
         $is_sender_bot = sb_isset($sender, 'user_type') == 'bot';
-        $is_dialogflow_active = defined('SB_DIALOGFLOW') && sb_get_setting('dialogflow-active');
+        $is_dialogflow_active = sb_dialogflow_active();
         $is_human_takeover_active = $is_dialogflow_active && sb_dialogflow_is_human_takeover($conversation_id);
         $is_human_takeover = $is_dialogflow_active && sb_get_multi_setting('dialogflow-human-takeover', 'dialogflow-human-takeover-active') && !$is_human_takeover_active;
         $last_agent = false;
@@ -1983,13 +1994,13 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
                 }
             }
             if (!$is_human_takeover && !$queue && ((!$is_sender_agent && sb_get_multi_setting('push-notifications', 'push-notifications-active')) || ($is_sender_agent && sb_get_multi_setting('push-notifications', 'push-notifications-users-active')))) {
-                sb_push_notification(sb_get_user_name($sender), $message, $sender['profile_image'], $recipient_id);
+                sb_push_notification(sb_get_user_name($sender), $message, $sender['profile_image'], $recipient_id, $conversation_id);
             }
             if (!$is_sender_bot && !$is_human_takeover) {
                 $user_check = $is_sender_agent && !sb_is_user_online($user_id);
                 $agent_check = !$is_sender_agent && (!is_numeric($recipient_id) || !sb_is_user_online($recipient_id));
                 if (($agent_check && sb_get_multi_setting('sms', 'sms-active-agents')) || ($user_check && sb_get_multi_setting('sms', 'sms-active-users'))) {
-                    $response_notification = sb_send_sms($message, $recipient_id, true, $conversation_id);
+                    $response_notification = sb_send_sms($message, $recipient_id, true, $conversation_id, $attachments);
                     if ($response_notification) array_push($response_notifications, 'sms');
                 }
                 if (($agent_check && sb_get_setting('notify-agent-email')) || ($user_check && !empty($user['email']) && sb_get_setting('notify-user-email'))) {
@@ -2055,13 +2066,14 @@ function sb_close_message($conversation_id, $bot_id = false) {
         $message_id = sb_send_message($bot_id, $conversation_id, $message, [], 3, ['type' => 'close-message'])['id'];
         $conversation_details = sb_db_get('SELECT user_id, source, extra FROM sb_conversations WHERE id = ' . $conversation_id);
         switch ($conversation_details['source']) {
+            case 'ig':
         	case 'fb':
                 sb_messenger_send_message(sb_get_user_extra($conversation_details['user_id'], 'facebook-id'), $conversation_details['extra'], $message, [], $message_id);
                 break;
             case 'wa':
                 sb_whatsapp_send_message(sb_get_user_extra($conversation_details['user_id'], 'phone'), $message);
                 break;
-            case 'sm':
+	        case 'sm':
                 sb_sms_send_message(sb_get_user_extra($conversation_details['user_id'], 'phone'), $message);
                 break;
         }
@@ -2128,12 +2140,11 @@ function sb_get_rich_message($name) {
         $success = '';
         switch ($name) {
             case 'registration-tickets':
-
             case 'registration':
                 $registration_tickets = $name == 'registration-tickets';
                 $active_user = sb_get_active_user();
                 $last_name = sb_get_setting('registration-last-name');
-                $user = $active_user != false && !sb_is_agent($active_user['user_type']) ? sb_get_user($active_user['id'], true) : ['profile_image' => '', 'first_name' => '', 'last_name' => '', 'email' => '', 'password' => '', 'user_type' => 'visitor', 'details' => []];
+                $user = $active_user && !sb_is_agent($active_user['user_type']) ? sb_get_user($active_user['id'], true) : ['profile_image' => '', 'first_name' => '', 'last_name' => '', 'email' => '', 'password' => '', 'user_type' => 'visitor', 'details' => []];
                 $visitor = $user['user_type'] == 'visitor' || $user['user_type'] == 'lead';
                 $settings = sb_get_setting('registration');
                 $registration_fields = sb_get_setting('registration-fields');
@@ -2151,7 +2162,6 @@ function sb_get_rich_message($name) {
                         $extra[$user['details'][$i]['slug']] = $user['details'][$i]['value'];
                     }
                 }
-
                 foreach ($registration_fields as $key => $value) {
                     if ($value) {
                         $key = str_replace('reg-', '', $key);
@@ -2189,7 +2199,7 @@ function sb_get_rich_message($name) {
                 }
                 if (sb_get_setting('registration-extra')) {
                     $additional_fields = sb_get_setting('user-additional-fields');
-                    if ($additional_fields != false) {
+                    if ($additional_fields) {
                         for ($i = 0; $i < count($additional_fields); $i++) {
                             $value = $additional_fields[$i];
                             $name = $value['extra-field-name'];
@@ -2200,7 +2210,6 @@ function sb_get_rich_message($name) {
                         }
                     }
                 }
-
                 $code .= '</div>' . $link . '<div class="sb-buttons"><div class="sb-btn sb-submit">' . sb_($visitor ? sb_isset($settings, 'registration-btn-text', 'Create account') : 'Update account') . '</div>' . ($password  ? '<div class="sb-btn-text sb-login-area">' . sb_('Sign in instead') . '</div>': '') . '</div>';
                 break;
             case 'login-tickets':
@@ -2218,7 +2227,7 @@ function sb_get_rich_message($name) {
                 $title = sb_($title == '' ? 'Office hours' : $title);
                 $message = sb_($message);
                 $code = '<div class="sb-timetable" data-offset="' . sb_get_setting('timetable-utc') . '">';
-                if ($timetable != false) {
+                if ($timetable) {
                     foreach ($timetable as $day => $hours) {
                         if ($hours[0][0]) {
                             $code .= '<div><div>' . sb_(ucfirst($day)) . '</div><div data-time="' . $hours[0][0] . '|' . $hours[1][0] . '|' . $hours[2][0] . '|' . $hours[3][0] . '"></div></div>';
@@ -2269,7 +2278,6 @@ function sb_get_shortcode($message, $name = false, $merge_field = false) {
     $separator = $merge_field ? ['{', '}'] : ['[', ']'];
     $response = false;
     $position = false;
-    $name = false;
     if (strpos($message, $separator[0]) === false) return false;
     if (!$name) {
         $shortcode_names = $merge_field ? [] : ['chips', 'buttons', 'select', 'inputs', 'card', 'slider-images', 'slider', 'list-image', 'list', 'button', 'video', 'image',  'rating', 'email', 'phone', 'registration', 'timetable', 'articles', 'table', 'share'];
@@ -2318,8 +2326,11 @@ function sb_is_agent_typing($conversation_id) {
     return sb_db_get('SELECT id, first_name, last_name FROM sb_users WHERE typing = ' . sb_db_escape($conversation_id) . ' AND (user_type = "agent" OR user_type = "admin") AND id <> ' . sb_get_active_user_ID());
 }
 
-function sb_set_typing($user_id, $conversation_id) {
-    return sb_db_query('UPDATE sb_users SET typing = ' . sb_db_escape($conversation_id) . ' WHERE id = ' . sb_db_escape($user_id));
+function sb_set_typing($user_id = false, $conversation_id = false, $source = false) {
+    if ($source) {
+        if (isset($source[0]) == 'fb') return sb_messenger_set_typing($source[1], $source[2]);
+        return false;
+    } else return sb_db_query('UPDATE sb_users SET typing = ' . sb_db_escape($conversation_id) . ' WHERE id = ' . sb_db_escape($user_id));
 }
 
 /*
@@ -2336,7 +2347,8 @@ function sb_set_typing($user_id, $conversation_id) {
  * 7. Save a translation langauge file and a copy of it as backup
  * 8. Restore a translation language file from a backup
  * 9. Return the user langauge code
- * 10. Translate a string in the given language
+ * 10. Return the langauge code of the admin area relative to the active agent
+ * 11. Translate a string in the given language
  *
  */
 
@@ -2348,37 +2360,64 @@ function sb_($string) {
     return empty($SB_TRANSLATIONS[$string]) ? $string : $SB_TRANSLATIONS[$string];
 }
 
+function sb_s($string) {
+    global $SB_TRANSLATIONS_SETTINGS;
+    if (!isset($SB_TRANSLATIONS_SETTINGS)) {
+        $language = sb_get_admin_language();
+        if ($language && $language != 'en') {
+            $SB_TRANSLATIONS_SETTINGS = json_decode(file_get_contents(SB_PATH . '/resources/languages/admin/settings/' . $language . '.json'), true);
+        }
+    }
+    return empty($SB_TRANSLATIONS_SETTINGS[$string]) ? $string : $SB_TRANSLATIONS_SETTINGS[$string];
+}
+
 function sb_e($string) {
     echo sb_($string);
+}
+
+function sb_se($string) {
+    echo sb_s($string);
 }
 
 function sb_init_translations() {
     global $SB_TRANSLATIONS;
     global $SB_LANGUAGE;
-
     if (!empty($SB_LANGUAGE) && $SB_LANGUAGE[0] != 'en') {
         $path = SB_PATH . '/resources/languages/' . $SB_LANGUAGE[1] . '/' . $SB_LANGUAGE[0] . '.json';
+        if (defined('SB_CLOUD')) {
+            $cloud_path = SB_PATH . '/uploads/cloud/languages/' . sb_isset(sb_cloud_account(), 'user_id') . '/' . $SB_LANGUAGE[1] . '/' . $SB_LANGUAGE[0] . '.json';
+            if (file_exists($cloud_path)) {
+                $path = $cloud_path;
+            }
+        }
         if (file_exists($path)) {
             $SB_TRANSLATIONS = json_decode(file_get_contents($path), true);
         }  else {
             $SB_TRANSLATIONS = false;
         }
     } else if (!isset($SB_LANGUAGE)) {
-        $language = sb_get_user_language();
         $admin = sb_is_agent();
-        $admin_lang = $admin && defined('SB_ADMIN_LANG') ? strtolower(SB_ADMIN_LANG) : false;
-        if (((!$language || $language == 'en') && !$admin_lang) || ($admin && !sb_get_setting('admin-auto-translations') && !$admin_lang) || (!$admin && !isset($_GET['lang']) && !sb_get_setting('front-auto-translations'))) {
+        $language = $admin ? sb_get_admin_language() : sb_get_user_language();
+        $cloud_default_language = defined('SB_CLOUD_DEFAULT_LANGUAGE_CODE') ? SB_CLOUD_DEFAULT_LANGUAGE_CODE : false;
+        $is_front_translations = sb_get_setting('front-auto-translations');
+        if ($cloud_default_language && ((!$admin && !$is_front_translations) || ($admin && !sb_get_setting('admin-auto-translations')))) $language = $cloud_default_language;
+        if ((!$language || $language == 'en') || (!$admin && !isset($_GET['lang']) && !$is_front_translations && !$cloud_default_language)) {
             $SB_TRANSLATIONS = false;
         } else {
-            switch($language) {
+            switch ($language) {
                 case 'nn':
                 case 'nb':
                     $language = 'no';
                     break;
             }
-            if ($admin_lang) $language = $admin_lang;
             $area = $admin ? 'admin' : 'front';
             $path = SB_PATH . '/resources/languages/' . $area . '/' . $language . '.json';
+            if (defined('SB_CLOUD')) {
+                $cloud_path = SB_PATH . '/uploads/cloud/languages/' . sb_isset(sb_cloud_account(), 'user_id') . '/' . $area . '/' . $language . '.json';
+                if (file_exists($cloud_path)) {
+                    $path = $cloud_path;
+                }
+            }
             if (file_exists($path)) {
                 $SB_TRANSLATIONS = json_decode(file_get_contents($path), true);
                 $SB_LANGUAGE = [$language, $area];
@@ -2404,30 +2443,28 @@ function sb_get_current_translations() {
 
 function sb_get_translations($is_user = false, $language_code = false) {
     $translations = [];
+    $cloud_path = false;
     if ($is_user && !file_exists(SB_PATH . '/uploads/languages')) {
         return [];
     }
     $path = $is_user ? '/uploads' : '/resources';
     $language_codes = json_decode(file_get_contents(SB_PATH . '/resources/languages/language-codes.json'), true);
-    $front_files = scandir(SB_PATH . $path . '/languages/front');
-    $admin_files = scandir(SB_PATH . $path . '/languages/admin');
-    $cloud_path = false;
+    $paths = ['front', 'admin', 'admin/js', 'admin/settings'];
     if (defined('SB_CLOUD')) {
         $cloud = sb_cloud_account();
-        $cloud_path = SB_PATH . '/resources/languages/cloud/' . $cloud['user_id'];
+        $cloud_path = SB_PATH . '/uploads/cloud/languages/' . $cloud['user_id'];
     }
-    for ($i = 0; $i < count($front_files); $i++)  {
-        $code = substr($front_files[$i], 0, -5);
-        if ($language_code && $language_code != $code) continue;
-        if (isset($language_codes[$code])) {
-            $translations[$code] = ['name' => $language_codes[$code], 'front' => json_decode(file_get_contents($cloud_path ? ($cloud_path . '/front/' . $front_files[$i]) : (SB_PATH . $path . '/languages/front/' . $front_files[$i])), true)];
-        }
-    }
-    for ($i = 0; $i < count($admin_files); $i++)  {
-        $code = substr($admin_files[$i], 0, -5);
-        if ($language_code && $language_code != $code) continue;
-        if (isset($translations[$code])) {
-            $translations[$code]['admin'] = json_decode(file_get_contents($cloud_path ? ($cloud_path . '/admin/' . $admin_files[$i]) : (SB_PATH . $path . '/languages/admin/' . $admin_files[$i])), true);
+    for ($i = 0; $i < count($paths); $i++) {
+        $files = scandir(SB_PATH . $path . '/languages/' . $paths[$i]);
+        for ($j = 0; $j < count($files); $j++)  {
+            $file = $files[$j];
+            if (strpos($file, '.json')) {
+                $code = substr($file, 0, -5);
+                if (!isset($language_codes[$code]) || ($language_code && $language_code != $code)) continue;
+                if (!isset($translations[$code])) $translations[$code] = ['name' => $language_codes[$code]];
+                $translation_strings = json_decode(file_get_contents($cloud_path && file_exists($cloud_path . '/' . $paths[$i] . '/' . $file) ? ($cloud_path . '/' . $paths[$i] . '/' . $file) : (SB_PATH . $path . '/languages/' . $paths[$i] . '/' . $file)), true);
+                $translations[$code][$paths[$i]] = $translation_strings;
+            }
         }
     }
     return $translations;
@@ -2440,25 +2477,35 @@ function sb_get_translation($language_code) {
 function sb_save_translations($translations) {
     $is_cloud = defined('SB_CLOUD');
     $cloud_path = false;
-    if (!file_exists(SB_PATH . '/uploads/languages')) {
+    if (!$is_cloud && !file_exists(SB_PATH . '/uploads/languages')) {
         mkdir(SB_PATH . '/uploads/languages', 0777, true);
         mkdir(SB_PATH . '/uploads/languages/front', 0777, true);
         mkdir(SB_PATH . '/uploads/languages/admin', 0777, true);
+        mkdir(SB_PATH . '/uploads/languages/admin/js', 0777, true);
+        mkdir(SB_PATH . '/uploads/languages/admin/settings', 0777, true);
     }
     if ($is_cloud) {
         $cloud = sb_cloud_account();
-        $cloud_path = SB_PATH . '/resources/languages/cloud/' . $cloud['user_id'];
+        $cloud_path = SB_PATH . '/uploads/cloud/languages/' . $cloud['user_id'];
+        if (!file_exists(SB_PATH . '/uploads/cloud')) {
+            mkdir(SB_PATH . '/uploads/cloud', 0777, true);
+            mkdir(SB_PATH . '/uploads/cloud/languages', 0777, true);
+        }
         if (!file_exists($cloud_path)) {
             mkdir($cloud_path, 0777, true);
             mkdir($cloud_path . '/front', 0777, true);
             mkdir($cloud_path . '/admin', 0777, true);
+            mkdir($cloud_path . '/admin/js', 0777, true);
+            mkdir($cloud_path . '/admin/settings', 0777, true);
         }
     }
-    if (is_string($translations)) $translations = json_decode($translations, true);
+    if (is_string($translations)) {
+        $translations = json_decode($translations, true);
+    }
     foreach ($translations as $key => $translation) {
         foreach ($translation as $key_area => $translations_list) {
-            $json = json_encode($translations_list, JSON_INVALID_UTF8_IGNORE);
-            if ($json != false) {
+            $json = html_entity_decode(json_encode($translations_list, JSON_INVALID_UTF8_IGNORE));
+            if ($json) {
                 if ($is_cloud) {
                     sb_file($cloud_path . '/' . $key_area . '/' . $key . '.json', $json);
                 } else {
@@ -2476,25 +2523,26 @@ function sb_save_translations($translations) {
 function sb_restore_user_translations() {
     $translations_all = sb_get_translations();
     $translations_user = sb_get_translations(true);
+    $paths = ['front', 'admin', 'admin/js', 'admin/settings'];
     foreach ($translations_user as $key => $translations) {
-        $paths = ['front', 'admin'];
-        for ($i = 0; $i < 2; $i++)  {
-            if (isset($translations_all[$key]) && isset($translations_all[$key][$paths[$i]])) {
-                foreach ($translations_all[$key][$paths[$i]] as $key_two => $translation) {
-                    if (!isset($translations[$paths[$i]][$key_two])) {
-                        $translations[$paths[$i]][$key_two] = $translations_all[$key][$paths[$i]][$key_two];
+        for ($i = 0; $i < count($paths); $i++)  {
+            $path = $paths[$i];
+            if (isset($translations_all[$key]) && isset($translations_all[$key][$path])) {
+                foreach ($translations_all[$key][$path] as $key_two => $translation) {
+                    if (!isset($translations[$path][$key_two])) {
+                        $translations[$path][$key_two] = $translations_all[$key][$path][$key_two];
                     }
                 }
             }
-            sb_file(SB_PATH . '/resources/languages/' . $paths[$i] . '/'. $key . '.json', json_encode($translations[$paths[$i]], JSON_INVALID_UTF8_IGNORE));
+            sb_file(SB_PATH . '/resources/languages/' . $path . '/'. $key . '.json', json_encode($translations[$path], JSON_INVALID_UTF8_IGNORE));
         }
     }
 }
 
 function sb_get_user_language($user_id = false) {
     if ($user_id) {
-        $language = sb_get_user_extra($user_id, 'browser_language');
-        $language = $language ? $language : sb_get_user_extra($user_id, 'language');
+        $language = sb_get_user_extra($user_id, 'language');
+        $language = $language ? $language : sb_get_user_extra($user_id, 'browser_language');
         if ($language) return $language;
     }
     global $SB_LANGUAGE;
@@ -2502,6 +2550,11 @@ function sb_get_user_language($user_id = false) {
         return isset($_GET['lang']) ? $_GET['lang'] : strtolower(substr(sb_isset($_SERVER, 'HTTP_ACCEPT_LANGUAGE', '  '), 0, 2));
     }
     return $SB_LANGUAGE[0];
+}
+
+function sb_get_admin_language($user_id = false) {
+    $language = strtolower(defined('SB_ADMIN_LANG') ? SB_ADMIN_LANG : sb_get_user_language(sb_get_setting('admin-auto-translations') ? ($user_id ? $user_id : sb_get_active_user_ID()) : false));
+    return $language && $language != 'en' ? $language : (defined('SB_CLOUD_DEFAULT_LANGUAGE_CODE') ? SB_CLOUD_DEFAULT_LANGUAGE_CODE : $language);
 }
 
 function sb_translate_string($string, $language_code) {
@@ -2573,7 +2626,7 @@ function sb_get_setting_code($array) {
     if (isset($array)) {
         $id = $array['id'];
         $type = $array['type'];
-        $content = '<div id="' . $id . '" data-type="' . $type . '"' . (isset($array['setting']) ? ' data-setting="' . $array['setting'] . '"' : '') .' class="sb-setting sb-type-' . $type . '"><div class="sb-setting-content"><h2>' . sb_($array["title"]) . '</h2><p>' . sb_($array["content"]) . (isset($array["help"]) ? '<a href="' . $array["help"] . '" target="_blank" class="sb-icon-help"></a>' : '') . '</p></div><div class="input">';
+        $content = '<div id="' . $id . '" data-type="' . $type . '"' . (isset($array['setting']) ? ' data-setting="' . $array['setting'] . '"' : '') .' class="sb-setting sb-type-' . $type . '"><div class="sb-setting-content"><h2>' . sb_s($array["title"]) . '</h2><p>' . sb_s($array["content"]) . (isset($array['help']) && (!defined('SB_CLOUD') || defined('SB_CLOUD_DOCS')) ? '<a href="' . (defined('SB_CLOUD_DOCS') ? (SB_CLOUD_DOCS . substr($array['help'], strpos($array['help'], '#'))) : $array['help']) . '" target="_blank" class="sb-icon-help"></a>' : '') . '</p></div><div class="input">';
         switch ($type) {
             case 'color':
                 $content .= '<input type="text"><i class="sb-close sb-icon-close"></i>';
@@ -2590,7 +2643,7 @@ function sb_get_setting_code($array) {
             case 'select':
                 $content .= '<select>';
                 for ($i = 0; $i < count($array['value']); $i++) {
-                    $content .= '<option value="' . $array['value'][$i][0] . '">' . sb_($array['value'][$i][1]) . '</option>';
+                    $content .= '<option value="' . $array['value'][$i][0] . '">' . sb_s($array['value'][$i][1]) . '</option>';
                 }
                 $content .= '</select>';
                 break;
@@ -2612,15 +2665,15 @@ function sb_get_setting_code($array) {
                 $content .= '<div class="image"' . (isset($array['background-size']) ? ' style="background-size: ' . $array['background-size'] . '"' : '')  . '><i class="sb-icon-close"></i></div>';
                 break;
             case 'input-button':
-                $content .= '<input type="text"><a class="sb-btn">' . sb_($array['button-text']) . '</a>';
+                $content .= '<input type="text"><a class="sb-btn">' . sb_s($array['button-text']) . '</a>';
                 break;
             case 'button':
-                $content .= '<a class="sb-btn" target="_blank" href="' . sb_($array['button-url']) . '">' . sb_($array['button-text']) . '</a>';
+                $content .= '<a class="sb-btn" target="_blank" href="' . $array['button-url'] . '">' . sb_s($array['button-text']) . '</a>';
                 break;
             case 'multi-input':
                 for ($i = 0; $i < count($array['value']); $i++) {
                     $sub_type = $array['value'][$i]['type'];
-                    $content .= '<div id="' . $array['value'][$i]['id'] . '" data-type="' . $sub_type . '" class="multi-input-' . $array['value'][$i]['type'] . '"><label>' . sb_($array['value'][$i]['title']) . '</label>';
+                    $content .= '<div id="' . $array['value'][$i]['id'] . '" data-type="' . $sub_type . '" class="multi-input-' . $array['value'][$i]['type'] . '"><label>' . sb_s($array['value'][$i]['title']) . '</label>';
                     switch ($sub_type) {
                         case 'text':
                             $content .= '<input type="text">';
@@ -2647,12 +2700,12 @@ function sb_get_setting_code($array) {
                             $content .= '<select>';
                             $items = $array['value'][$i]['value'];
                             for ($j = 0; $j < count($items); $j++) {
-                                $content .= '<option value="' . $items[$j][0] . '">' . sb_($items[$j][1]) . '</option>';
+                                $content .= '<option value="' . $items[$j][0] . '">' . sb_s($items[$j][1]) . '</option>';
                             }
                             $content .= '</select>';
                             break;
                         case 'button':
-                            $content .= '<a class="sb-btn" target="_blank" href="' . sb_($array['value'][$i]['button-url']) . '">' . sb_($array['value'][$i]['button-text']) . '</a>';
+                            $content .= '<a class="sb-btn" target="_blank" href="' . $array['value'][$i]['button-url'] . '">' . sb_s($array['value'][$i]['button-text']) . '</a>';
                     }
                     $content .= '</div>';
                 }
@@ -2666,7 +2719,7 @@ function sb_get_setting_code($array) {
                 $content .= '<div class="sb-repeater"><div class="repeater-item">';
                 for ($i = 0; $i < count($array['items']); $i++) {
                     $item = $array['items'][$i];
-                    $content .= '<div>' . (isset($item['name']) ? '<label>' . sb_($item['name']) . '</label>' : '');
+                    $content .= '<div>' . (isset($item['name']) ? '<label>' . sb_s($item['name']) . '</label>' : '');
                     switch ($item['type']) {
                         case 'text':
                             $content .= '<input data-id="' . $item['id'] . '" type="text">';
@@ -2895,7 +2948,7 @@ function sb_get_front_settings() {
         'bot-image' => sb_get_setting('bot-image', ''),
         'bot-delay' => sb_get_setting('dialogflow-bot-delay', 2000),
         'bot-office-hours' => sb_get_setting('dialogflow-timetable'),
-        'dialogflow-active' => defined('SB_DIALOGFLOW') && sb_get_setting('dialogflow-active'),
+        'dialogflow-active' => sb_dialogflow_active(),
         'dialogflow-human-takeover' => sb_get_multi_setting('dialogflow-human-takeover', 'dialogflow-human-takeover-active'),
         'dialogflow-welcome' => false,
         'slack-active' => defined('SB_SLACK') && sb_get_setting('slack-active'),
@@ -3274,7 +3327,7 @@ function sb_email_create_content($subject, $message, $attachments, $replacements
         $attachments_code = '<div style="margin-top: 30px">' . $attachments_code . '</div>';
     }
     if ($subject == '') {
-        $subject = '[Support Board] New message from {sender_name}';
+        $subject = 'New message from {sender_name}';
     }
     if ($message == '') {
         $message = '<br />Hello {recipient_name}!<br /><br />{message}{attachments}
@@ -3335,7 +3388,7 @@ function sb_email_send($to, $subject, $message, $sender_suffix = '') {
 }
 
 function sb_email($recipient_id, $message, $attachments = [], $sender_id = -1) {
-    if ($recipient_id == false || $message == false || $message == '') {
+    if (!$recipient_id || empty($message)) {
         return new SBValidationError('missing-user-id-or-message');
     }
     if (!sb_email_security($recipient_id)) {
@@ -3343,7 +3396,7 @@ function sb_email($recipient_id, $message, $attachments = [], $sender_id = -1) {
     }
     $sender = $sender_id == -1 ? sb_get_active_user() : sb_get_user($sender_id);
     $user = sb_get_user($recipient_id);
-    if ($sender != false && isset($sender['id']) && $user != false && isset($user['id'])) {
+    if ($sender && $user && isset($sender['id']) && isset($user['id'])) {
         if ($user['email'] == '') {
             return new SBValidationError('user-email-not-found');
         }
@@ -3578,7 +3631,7 @@ function sb_email_piping($force = false) {
                                         if (($agent && sb_get_multi_setting('sms', 'sms-active-users')) || (!$agent && sb_get_multi_setting('sms', 'sms-active-agents'))) {
                                             $phone = sb_get_user_extra($recipient['id'], 'phone');
                                             if ($phone) {
-                                                sb_send_sms($message, $phone, true, $conversation_id);
+                                                sb_send_sms($message, $phone, true, $conversation_id, $attachments_2);
                                             }
                                         }
                                     } else if (!$follow_up && sb_get_setting('notify-agent-email')) {
@@ -3823,7 +3876,7 @@ function sb_app_update($app_name, $file_name, $key = false) {
     $key = trim($key);
     $error = '';
     $zip = sb_download('http://board.support/synch/temp/' . $file_name);
-    if ($zip != false) {
+    if ($zip) {
         $file_path = SB_PATH . '/uploads/' . $app_name . '.zip';
         file_put_contents($file_path, $zip);
         if (file_exists($file_path)) {
@@ -3912,7 +3965,6 @@ function sb_updates_available() {
             return true;
         }
     }
-    if (!strpos(SB_URL, 'localhost')) sb_get('https://board.support/synch/index.php?stats=true&site=' . SB_URL . '&date=' . date('d-m-Y') . '&users=' . sb_db_get('SELECT COUNT(*) AS `count` FROM sb_users')['count'] . '&agents=' . sb_db_get('SELECT COUNT(*) AS `count` FROM sb_users WHERE user_type = "agent" OR user_type = "admin"')['count'] . '&conversations=' . sb_db_get('SELECT COUNT(*) AS `count` FROM sb_conversations')['count']);
     return false;
 }
 
@@ -3926,13 +3978,13 @@ function sb_updates_available() {
  */
 
 function sb_webhooks($function_name, $parameters) {
-    if (isset($function_name) && $function_name && isset($parameters)) {
+    if ($function_name && $parameters) {
         $names = ['SBSMSSent' => 'sms-sent', 'SBLoginForm' => 'login', 'SBRegistrationForm' => 'registration', 'SBUserDeleted' => 'user-deleted', 'SBMessageSent' => 'message-sent', 'SBBotMessage' => 'bot-message', 'SBEmailSent' => 'email-sent', 'SBNewMessagesReceived' => 'new-message', 'SBNewConversationReceived' => 'new-conversation', 'SBNewConversationCreated' => 'new-conversation-created', 'SBActiveConversationStatusUpdated' => 'conversation-status-updated', 'SBSlackMessageSent' => 'slack-message-sent', 'SBMessageDeleted' => 'message-deleted',  'SBRichMessageSubmit' => 'rich-message', 'SBNewEmailAddress' => 'new-email-address'];
         if (isset($names[$function_name])) {
             $webhooks = sb_get_setting('webhooks');
             if ($webhooks !== false && $webhooks['webhooks-url'] && $webhooks['webhooks-active']) {
                 $query = json_encode(['function' => $names[$function_name], 'key' =>$webhooks['webhooks-key'], 'data' => $parameters, 'sender-url' => (isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '')]);
-                if ($query != false) {
+                if ($query) {
                     return sb_curl($webhooks['webhooks-url'], $query, [ 'Content-Type: application/json', 'Content-Length: ' . strlen($query)]);
                 } else {
                     return new SBError('webhook-json-error');
@@ -4033,6 +4085,9 @@ function sb_pusher_trigger($channel, $event, $data = []) {
             break;
         case 'update-conversations':
             if ($user_id) $security = true;
+            break;
+        case 'gumroad':
+            if ($channel == 'cloud') $security = true;
             break;
     }
     if (defined('SB_CLOUD')) {
@@ -4227,6 +4282,7 @@ function sb_curl($url, $post_fields = '', $header = [], $type = 'POST') {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch, CURLOPT_USERAGENT, 'SB');
     switch ($type) {
+        case 'DELETE':
         case 'PUT':
         case 'PATCH':
         case 'POST':
@@ -4234,11 +4290,8 @@ function sb_curl($url, $post_fields = '', $header = [], $type = 'POST') {
             curl_setopt($ch, CURLOPT_POSTFIELDS, is_string($post_fields) ? $post_fields : http_build_query($post_fields));
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
             curl_setopt($ch, CURLOPT_TIMEOUT, 7);
-            if ($type == 'PATCH') {
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
-            }
-            if ($type == 'PUT') {
-                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+            if ($type != 'POST') {
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $type);
             }
             break;
         case 'GET':
@@ -4305,7 +4358,7 @@ function sb_get($url) {
 
 function sb_csv($items, $header, $filename) {
     $file = fopen(sb_upload_path() . '/' . $filename . '.csv', 'w');
-    if (isset($header)) {
+    if ($header) {
         fputcsv($file, $header);
     }
     for ($i = 0; $i < count($items); $i++) {
@@ -4368,6 +4421,7 @@ function sb_json_array($json, $default = []) {
  * 12. Verification cookie
  * 13. On Support Board close
  * 14. Auto messages server-side execution
+ * 15. Check if dialogflow active
  *
  */
 
@@ -4404,7 +4458,7 @@ function sb_departments($type) {
                 break;
             case 'dashboard':
                 $settings = sb_get_setting('departments-settings');
-                if ($settings != false) {
+                if ($settings ) {
                     $is_image = sb_isset($settings, 'departments-images') && sb_isset($items[0],'department-image');
                     $code = '<div class="sb-dashboard-departments"><div class="sb-title">' .  sb_(sb_isset($settings, 'departments-title', 'Departments')) . '</div><div class="sb-departments-list">';
                     for ($i = 0; $i < $count; $i++) {
@@ -4417,25 +4471,25 @@ function sb_departments($type) {
     }
 }
 
+
 function sb_office_hours() {
     $settings = sb_get_settings();
     $timetable = sb_isset($settings, 'timetable', [[]])[0];
-    $today = strtolower(gmdate('l'));
-    if (isset($timetable[$today]) && $timetable[$today][0][0]) {
-        $now_hours = intval(gmdate('H'));
-        $now_minutes = intval(gmdate('i'));
+    $now = time();
+    $offset = intval(sb_get_setting('timetable-utc', 0));
+    $offset_2 = $now - ($offset * 3600);
+    $today = strtolower(gmdate('l', $offset_2));
+    $today_array = explode('-', gmdate('m-d-y', $offset_2));
+    $today_array = [intval($today_array[0]), intval($today_array[1]), intval($today_array[2])];
+    if (isset($timetable[$today]) && !empty($timetable[$today][0][0])) {
         $status = false;
-        $offset = intval(sb_get_setting('timetable-utc', 0));
-        for ($i = 0; $i < 3; $i+=2){
-            if ($timetable[$today][$i][0] && $timetable[$today][$i][0] != 'closed' && $timetable[$today][$i + 1][0]) {
-                $hours_start = intval(explode(':', $timetable[$today][$i][0])[0]) + $offset;
-                $minutes_start = intval(explode(':',$timetable[$today][$i][0])[1]);
-                $hours_end = intval(explode(':', $timetable[$today][$i + 1][0])[0]) + $offset;
-                $minutes_end = intval(explode(':', $timetable[$today][$i + 1][0])[1]);
-                if (($now_hours > $hours_start || ($now_hours == $hours_start && $now_minutes >= $minutes_start)) && ($now_hours < $hours_end || ($now_hours == $hours_end && $now_minutes <= $minutes_end))) {
-                    $status = true;
-                    break;
-                }
+        for ($i = 0; $i < 3; $i += 2) {
+            if (!empty($timetable[$today][$i][0]) && $timetable[$today][$i][0] != 'closed') {
+                $start = explode(':', $timetable[$today][$i][0]);
+                $end = explode(':', $timetable[$today][$i + 1][0]);
+                $office_hours_start = gmmktime(intval($start[0]) + $offset, intval($start[1]), 0, $today_array[0], $today_array[1], $today_array[2]);
+                $office_hours_end = gmmktime(intval($end[0]) + $offset, intval($end[1]), 0, $today_array[0], $today_array[1], $today_array[2]);
+                if ($now >= $office_hours_start && $now <= $office_hours_end) $status = true;
             }
         }
         return $status;
@@ -4744,13 +4798,14 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
                                         }
                                         $message_id = sb_send_message(sb_get_bot_id(), $conversation_id, $message_new, [], -1, ['event' => 'update-user'])['id'];
                                         switch ($source_name) {
+                                            case 'ig':
                                             case 'fb':
                                                 sb_messenger_send_message($source['psid'], $source['page_id'], $message_new, [], $message_id);
                                                 break;
                                             case 'wa':
                                                 sb_whatsapp_send_message($source['phone'], $message_new);
                                                 break;
-                                            case 'sm':
+					                        case 'sm':
                                                 sb_sms_send_message($source['phone'], $message_new);
                                                 break;
                                         }
@@ -4764,13 +4819,14 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
                     if (!$valid) {
                         $message_id = sb_send_message(sb_get_bot_id(), $conversation_id, $last_message)['id'];
                         switch ($source_name) {
+                            case 'ig':
                             case 'fb':
                                 sb_messenger_send_message($source['psid'], $source['page_id'], $last_message, [], $message_id);
                                 break;
                             case 'wa':
                                 sb_whatsapp_send_message($source['phone'], $last_message);
                                 break;
-                            case 'sm':
+			                case 'sm':
                                 sb_sms_send_message($source['phone'], $last_message);
                                 break;
                         }
@@ -4794,13 +4850,14 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
                 $empty = empty($messages[$i]['message']);
                 if (!$empty || isset($messages[$i]['attachments'])) {
                     switch ($source_name) {
+                        case 'ig':
                         case 'fb':
                             sb_messenger_send_message($source['psid'], $source['page_id'], $empty ? '' : $messages[$i]['message'], sb_isset($messages[$i], 'attachments'), $messages[$i]['id']);
                             break;
                         case 'wa':
                             sb_whatsapp_send_message($source['phone'], $empty ? '' : $messages[$i]['message'], sb_isset($messages[$i], 'attachments'));
                             break;
-                        case 'sm':
+			            case 'sm':
                             sb_sms_send_message($source['phone'], $empty ? '' : $messages[$i]['message'], sb_isset($messages[$i], 'attachments'));
                             break;
                     }
@@ -4808,12 +4865,13 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
                 if (isset($messages[$i]['payload'])) {
                     $args = [];
                     switch ($source_name) {
+                        case 'ig':
                         case 'fb':
-                            $args = ['source' => 'fb', 'psid' => $source['psid'], 'page_id' => $source['page_id'], 'attachments' => $attachments];                            break;
+                            $args = ['source' => $source_name, 'psid' => $source['psid'], 'page_id' => $source['page_id'], 'attachments' => $attachments];                            break;
                         case 'wa':
                             $args = ['source' => 'wa', 'phone' => $source['phone'], 'attachments' => $attachments];
                             break;
-                        case 'sm':
+			            case 'sm':
                             $args = ['source' => 'sm', 'phone' => $source['phone'], 'attachments' => $attachments];
                             break;
                     }
@@ -4831,11 +4889,12 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
             $bot_message = $i == 0 || empty($user['email']) ? sb_execute_bot_message($bot_messages[$i], $conversation_id, $last_message) : false;
             if ($bot_message) {
                 switch ($source_name) {
+                    case 'ig':
                     case 'fb':
                         sb_messenger_send_message($source['psid'], $source['page_id'], $bot_message['message'], [], $bot_message['id']);
                     case 'wa':
                         sb_whatsapp_send_message($source['phone'], $bot_message['message']);
-                    case 'sm':
+		            case 'sm':
                         sb_sms_send_message($source['phone'], $bot_message['message']);
                 }
                 if ($slack) sb_send_slack_message($slack[0], $slack[1], $slack[2], $bot_message['message']);
@@ -4847,6 +4906,10 @@ function sb_messaging_platforms_functions($conversation_id, $message, $attachmen
     if ($slack) sb_send_slack_message($slack[0], $slack[1], $slack[2], $message, $attachments);
 
     return $human_takeover ? 'human_takeover' : true;
+}
+
+function sb_dialogflow_active() {
+    return defined('SB_DIALOGFLOW') && sb_get_setting('dialogflow-active');
 }
 
 /*
@@ -4864,7 +4927,7 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
     $data = [];
     $data_final = [];
     $title = '';
-    $table = ['Date', 'Count'];
+    $table = [sb_('Date'), sb_('Count')];
     $description = '';
     $period = [];
     $query = '';
@@ -4898,44 +4961,44 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
             $query = 'SELECT creation_time, conversation_id FROM sb_messages A';
             $title = 'Average conversations duration';
             $description = 'Average conversations duration. Messages sent more than 7 days after the previous message are counted as part of a new conversation.';
-            $table = ['Date', 'Average time'];
+            $table = [sb_('Date'), sb_('Average time')];
             $label_type = 2;
             break;
         case 'visitors':
             $query = 'SELECT creation_time, value FROM sb_reports A WHERE name = "visitors"';
-            $title = 'Visitors registrations count';
+            $title = 'Visitor registrations count';
             $description = 'Visitors count. Visitors are users who have not started any conversations and who are not registered.';
             break;
         case 'leads':
             $query = 'SELECT creation_time FROM sb_users A WHERE user_type = "lead"';
-            $title = 'Leads registrations count';
+            $title = 'Lead registrations count';
             $description = 'Leads count. Leads are users who have started at least one conversation but who are not registered.';
             break;
         case 'users':
             $query = 'SELECT creation_time FROM sb_users A WHERE user_type = "user"';
-            $title = 'Users registrations count';
+            $title = 'User registrations count';
             $description = 'Users count. Users are registered with an email address.';
             break;
         case 'agents-response-time':
-            $title = 'Average agents response time';
+            $title = 'Average agent response time';
             $description = 'Average time for agents to send the first reply after the user sends the first message.';
-            $table = ['Agent name', 'Average time'];
+            $table = [sb_('Agent name'), sb_('Average time')];
             $time_range = false;
             $chart_type = 'bar';
             $label_type = 2;
             break;
         case 'agents-conversations':
-            $title = 'Agents conversations count';
+            $title = 'Agent conversations count';
             $description = 'Number of conversations which at least one reply from the agent.';
-            $table = ['Agent name', 'Count'];
+            $table = [sb_('Agent name'), sb_('Count')];
             $chart_type = 'bar';
             $time_range = false;
             break;
         case 'agents-conversations-time':
             $query = 'SELECT creation_time, conversation_id FROM sb_messages A';
-            $title = 'Average agents conversations duration';
+            $title = 'Average agent conversations duration';
             $description = 'Average conversations duration of each agent. Messages sent more than 7 days after the previous message are counted as part of a new conversation.';
-            $table = ['Agent name', 'Average time'];
+            $table = [sb_('Agent name'), sb_('Average time')];
             $chart_type = 'bar';
             $label_type = 2;
             $time_range = false;
@@ -4943,39 +5006,39 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
         case 'agents-ratings':
             $title = 'Agent ratings';
             $description = 'Ratings assigned to agents.';
-            $table = ['Agent name', 'Ratings'];
+            $table = [sb_('Agent name'), sb_('Ratings')];
             $chart_type = 'horizontalBar';
             $time_range = false;
             $label_type = 3;
             break;
         case 'countries':
-            $title = 'Users countries';
+            $title = 'User countries';
             $description = 'Countries of users who started at least one chat.';
-            $table = ['Country', 'Count'];
+            $table = [sb_('Country'), sb_('Count')];
             $time_range = false;
             $chart_type = 'pie';
             $label_type = 4;
             break;
         case 'languages':
-            $title = 'Users languages';
+            $title = 'User languages';
             $description = 'Languages of users who started at least one chat.';
-            $table = ['Language', 'Count'];
+            $table = [sb_('Language'), sb_('Count')];
             $time_range = false;
             $chart_type = 'pie';
             $label_type = 4;
             break;
         case 'browsers':
-            $title = 'Users browsers';
+            $title = 'User browsers';
             $description = 'Browsers used by users who started at least one chat.';
-            $table = ['Browser', 'Count'];
+            $table = [sb_('Browser'), sb_('Count')];
             $time_range = false;
             $chart_type = 'pie';
             $label_type = 4;
             break;
         case 'os':
-            $title = 'Users operating systems';
+            $title = 'User operating systems';
             $description = 'Operating systems used by users who started at least one chat.';
-            $table = ['Operating system', 'Count'];
+            $table = [sb_('Operating system'), sb_('Count')];
             $time_range = false;
             $chart_type = 'pie';
             $label_type = 4;
@@ -4997,15 +5060,15 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
             break;
         case 'articles-searches':
             $query = 'SELECT creation_time, value FROM sb_reports A WHERE name = "articles-searches"';
-            $title = 'Articles searches';
+            $title = 'Article searches';
             $description = 'Articles searches made by users.';
-            $table = ['Date', 'Search terms'];
+            $table = [sb_('Date'), sb_('Search terms')];
             break;
         case 'articles-ratings':
             $query = 'SELECT value, extra FROM sb_reports A WHERE name = "article-ratings"';
-            $title = 'Articles ratings';
-            $description = 'Ratings assigned to articles.';
-            $table = ['Article name', 'Ratings'];
+            $title = 'Article ratings';
+            $description = 'Ratings assigned to articles by users.';
+            $table = [sb_('Article name'), sb_('Ratings')];
             $chart_type = 'horizontalBar';
             $time_range = false;
             $label_type = 3;
@@ -5013,12 +5076,12 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
         case 'articles-views-single':
         case 'articles-views':
             $query = 'SELECT creation_time, value, extra FROM sb_reports A WHERE name = "articles-views"';
-            $title = 'Articles views';
+            $title = 'Article views';
             $description = 'Number of times articles have been viewed by users.';
             if ($report_name == 'articles-views-single') {
                 $chart_type = 'horizontalBar';
                 $time_range = false;
-                $table = ['Article', 'Count'];
+                $table = [sb_('Article'), sb_('Count')];
             }
             break;
         case 'sms-automations':
@@ -5033,7 +5096,7 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
             $query = 'SELECT creation_time, value FROM sb_reports A WHERE name = "' . $report_name . '"';
             $name = $report_name == 'direct-emails' ? 'emails' : ($report_name == 'direct-messages' ? 'chat messages' : 'text messages');
             $title = 'Direct ' . $name;
-            $description = 'Direct ' . $name . ' sent to users. The details column shows the first part of the message and the number of users to which it has been sent to.';
+            $description = 'Direct messages sent to users. The details column shows the first part of the message and the number of users to which it has been sent to.';
             $table = ['Date', 'Details'];
             break;
     }
@@ -5250,18 +5313,11 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
                     $value = trim(substr($value, strpos($value, ',') + 1));
                     $valid = true;
                 }
-                if ($is_languages && isset($language_codes[strtolower($value)])) {
-                    $language_code = strtolower($value);
-                    $value = $language_codes[$language_code];
-                    if (!isset($flags[$value]) && file_exists(SB_PATH . '/media/flags/languages/' . $language_code . '.png')) {
-                        $flags[$value] = $language_code;
-                    }
-                    $valid = true;
-                }
-                if ($is_country && isset($country_codes[ucfirst($value)])) {
-                    $country_code = strtolower($country_codes[ucfirst($value)]);
-                    if (!isset($flags[$country_code]) && file_exists(SB_PATH . '/media/flags/countries/' . $country_code . '.png')) {
-                        $flags[$value] = $country_code;
+                if (($is_languages && isset($language_codes[strtolower($value)])) || ($is_country && isset($country_codes[strtoupper($value)]))) {
+                    $code = strtolower($is_languages ? $value : $country_codes[strtoupper($value)]);
+                    $value = $language_codes[$code];
+                    if (!isset($flags[$value]) && file_exists(SB_PATH . '/media/flags/' . $code . '.png')) {
+                        $flags[$value] = $code;
                     }
                     $valid = true;
                 }
@@ -5273,7 +5329,7 @@ function sb_reports($report_name, $date_start = false, $date_end = false) {
             arsort($data);
             foreach ($data as $key => $value) {
                 $image = '';
-                if (isset($flags[$key])) $image = '<img class="sb-flag" src="' . SB_URL . '/media/flags/languages/' . $flags[$key] . '.png" />';
+                if (isset($flags[$key])) $image = '<img class="sb-flag" src="' . SB_URL . '/media/flags/' . $flags[$key] . '.png" />';
                 if ($is_browser) {
                     $lowercase = strtolower($key);
                     if (strpos($lowercase, 'chrome') !== false) {
@@ -5386,7 +5442,7 @@ function sb_reports_update($name, $value = false, $external_id = false, $extra =
  *
  */
 
-function sb_send_sms($message, $to, $template = true, $conversation_id = true) {
+function sb_send_sms($message, $to, $template = true, $conversation_id = true, $attachments = false) {
     $settings = sb_get_setting('sms');
     $to_agents = $to == 'agents' || $to == 'all-agents' || strpos($to, 'department-') !== false;
 
@@ -5396,7 +5452,7 @@ function sb_send_sms($message, $to, $template = true, $conversation_id = true) {
         $online_agents_ids = sb_get_online_user_ids(true);
         for ($i = 0; $i < count($phones); $i++) {
             if (!in_array($phones[$i]['id'], $online_agents_ids)) {
-                sb_send_sms($message, $phones[$i]['value'], $template, $conversation_id);
+                sb_send_sms($message, $phones[$i]['value'], $template, $conversation_id, $attachments);
             }
         }
         return false;
@@ -5415,7 +5471,22 @@ function sb_send_sms($message, $to, $template = true, $conversation_id = true) {
     $message = str_replace(['{conversation_url_parameter}', '{recipient_name}', '{sender_name}', '{recipient_email}', '{sender_email}'], [$conversation_id && $user ? ('?conversation=' . $conversation_id . '&token=' . $user['token']) : '', sb_get_user_name($user), sb_get_user_name(), sb_isset($user, 'email'), sb_isset(sb_get_active_user(), 'email', '')], sb_merge_fields($message));
 
     // Send the SMS
-    $query = ['Body' => sb_clear_text_formatting(strip_tags($message)), 'From' => $settings['sms-sender'], 'To' => $to];
+    $message = sb_clear_text_formatting(strip_tags($message));
+    $query = ['Body' => $message, 'From' => $settings['sms-sender'], 'To' => $to];
+    if ($attachments) {
+        $mime_types = ['jpeg', 'jpg', 'png', 'gif'];
+        for ($i = 0; $i < count($attachments); $i++) {
+            $attachment = is_array($attachments[$i]) ? $attachments[$i][1] : $attachments[$i];
+            if (in_array(pathinfo($attachment, PATHINFO_EXTENSION), $mime_types)) {
+                $query['MediaUrl' . $i] = $attachment;
+            } else {
+                $message .= PHP_EOL . PHP_EOL . $attachment;
+            }
+        }
+        $query['Body'] = $message;
+        $query = http_build_query($query);
+        if (strpos($query, 'MediaUrl')) $query = str_replace(['MediaUrl0', 'MediaUrl1', 'MediaUrl2','MediaUrl3','MediaUrl4','MediaUrl5','MediaUrl6','MediaUrl7','MediaUrl8','MediaUrl9'], 'MediaUrl', $query);
+    }
     return sb_curl('https://api.twilio.com/2010-04-01/Accounts/' . $settings['sms-user'] . '/Messages.json', $query, [ 'Authorization: Basic  ' . base64_encode($settings['sms-user'] . ':' . $settings['sms-token']) ]);
 }
 
@@ -5598,9 +5669,9 @@ function sb_automations_validate($automation) {
             case 'countries':
                 if ($active_user) {
                     if ($conditions[$i][0] == 'languages') {
-                        $user_value = sb_get_user_extra($active_user_id, 'browser_language');
+                        $user_value = sb_get_user_extra($active_user_id, 'language');
                         if (!$user_value) {
-                            $user_value = sb_get_user_extra($$active_user_id, 'language');
+                            $user_value = sb_get_user_extra($$active_user_id, 'browser_language');
                             if (strlen($user_value) > 2) $user_value = substr($user_value, 0, 2);
                         }
                     } else if ($conditions[$i][0] == 'cities') {
@@ -5735,18 +5806,13 @@ function sb_automations_run($automation, $validate = false) {
  * 2. Check if the membership is valid
  * 3. Cloud account
  * 4. Load the config.php file
+ * 5. Load reseller js and css codes
  *
  */
 
 function sb_cloud_increase_count() {
     require_once(SB_CLOUD_PATH . '/account/functions.php');
-    global $CLOUD_CONNECTION;
-    if (!isset($_POST['cloud'])) die('post-cloud-not-found');
-    $cloud = sb_cloud_account();
-    db_query('UPDATE membership_counter SET count = count + 1 WHERE user_id = ' . $cloud['user_id']);
-    if ($CLOUD_CONNECTION->affected_rows == 0 || $CLOUD_CONNECTION->affected_rows == -1) {
-        db_query('INSERT INTO membership_counter (user_id, count, date) VALUES (' . $cloud['user_id'] . ', 1, "' . date('m-y') . '")');
-    }
+    cloud_increase_count();
 }
 
 function sb_cloud_membership_validation() {
@@ -5757,7 +5823,7 @@ function sb_cloud_membership_validation() {
 }
 
 function sb_cloud_account() {
-    return json_decode(sb_encryption('decrypt', $_POST['cloud']), true);
+    return json_decode(sb_encryption('decrypt', isset($_POST['cloud']) ? $_POST['cloud'] : $_GET['cloud']), true);
 }
 
 function sb_cloud_ajax_function_forbidden($function_name) {
@@ -5774,6 +5840,11 @@ function sb_cloud_load() {
         } else return 'cloud-data-not-found';
     }
     return true;
+}
+
+function sb_cloud_css_js() {
+    require_once(SB_CLOUD_PATH . '/account/functions.php');
+    cloud_css_js();
 }
 
 ?>

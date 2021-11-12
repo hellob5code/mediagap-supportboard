@@ -223,7 +223,7 @@ function sb_login_box() { ?>
         <div class="sb-top-bar">
             <img src="<?php echo sb_get_setting('login-icon') != false ? sb_get_setting('login-icon') : SB_URL . '/media/logo.svg' ?>" />
             <div class="sb-title"><?php sb_e(sb_get_setting('admin-title', 'Sign into')) ?></div>
-            <div class="sb-text"><?php sb_e(sb_get_setting('login-message', defined('SB_WP') ? 'Please insert email and password of your WordPress account' : 'To continue to Support Board')) ?></div>
+            <div class="sb-text"><?php echo sb_get_setting('login-message', defined('SB_WP') ? sb_('Please insert email and password of your WordPress account') : sb_('To continue to') . ' Support Board') ?></div>
         </div>
         <div class="sb-main">
             <div id="email" class="sb-input">
@@ -458,9 +458,8 @@ function sb_direct_message_box() { ?>
                     <i class="sb-icon-plane"></i><?php sb_e('Send message now') ?>
                 </a>
                 <div></div>
-                <a class="sb-btn-text" target="_blank" href="https://board.support/docs#direct-message">
-                    <i class="sb-icon-help"></i>
-                </a>
+                <?php if (!defined('SB_CLOUD')) echo '<a class="sb-btn-text" target="_blank" href="https://board.support/docs#direct-message"><i class="sb-icon-help"></i></a>' ?>
+                
             </div>
         </div>
     </div>
@@ -612,7 +611,7 @@ function sb_component_admin() {
         ['SB_WP', 'wordpress', 'WordPress'], 
         ['SB_DIALOGFLOW', 'dialogflow', 'Dialogflow', 'Connect smart chatbots and automate conversations by using one of the most advanced forms of artificial intelligence in the world.'],
         ['SB_TICKETS', 'tickets', 'Tickets', 'Provide help desk support to your customers by including a ticket area, with all chat features included, on any web page in seconds.'],
-        ['SB_MESSENGER', 'messenger', 'Messenger', 'Read, manage and reply to all messages sent to your Facebook pages directly from Support Board, and keep your communication in one place.'],
+        ['SB_MESSENGER', 'messenger', 'Messenger', 'Read, manage and reply to all messages sent to your Facebook pages and Instagram accounts directly from Support Board.'],
         ['SB_WHATSAPP', 'whatsapp', 'WhatsApp', 'Lets your users reach you via WhatsApp. Read and reply to all messages sent to your WhatsApp Business account directly from Support Board.'],
         ['SB_WOOCOMMERCE', 'woocommerce', 'WooCommerce', 'Increase sales, provide better support, and faster solutions, by integrating WooCommerce with Support Board.'],
         ['SB_SLACK', 'slack', 'Slack', 'Communicate with your users right from Slack. Send and receive messages and attachments, use emojis, and much more.'], 
@@ -621,7 +620,7 @@ function sb_component_admin() {
         ['SB_WHMCS', 'whmcs', 'Whmcs', 'Synchronize your customers in real-time, chat with them and boost their engagement, or provide a better and faster support.'],
         ['SB_AECOMMERCE', 'aecommerce', 'Active eCommerce', 'Increase sales and connect you and sellers with customers in real-time by integrating Active eCommerce with Support Board.'],
         ['SB_ARMEMBER', 'armember', 'ARMember', 'Synchronize customers, enable ticket and chat support for subscribers only, view subscription plans in the admin area.'],
-        ['SB_SMS', 'sms', 'SMS', 'Lets your users reach you via SMS. Read and reply to all messages sent to your SMS Business account directly from Support Board.']
+	    ['SB_SMS', 'sms', 'SMS', 'Lets your users reach you via SMS. Read and reply to all messages sent to your SMS Business account directly from Support Board.']
     ];
     $logged = $active_user && sb_is_agent($active_user['user_type']);
     $is_admin = $active_user && $active_user['user_type'] == 'admin';
@@ -634,7 +633,7 @@ function sb_component_admin() {
         <?php if ($logged) { ?>
         <div class="sb-header">
             <div class="sb-admin-nav">
-                <img src="<?php echo SB_URL ?>/media/icon.svg" />
+                <img src="<?php echo $is_cloud ? SB_CLOUD_BRAND_ICON : sb_get_setting('admin-icon', SB_URL . '/media/icon.svg') ?>" />
                 <div>
                     <a id="sb-conversations" class="sb-active">
                         <span>
@@ -669,10 +668,10 @@ function sb_component_admin() {
                             </ul>
                         </div>
                     </div>
-                    <?php if ($is_admin) echo '<a href="http://board.support/docs/' . ($is_cloud ? '?cloud' : '') . '" target="_blank" class="sb-docs"><i class="sb-icon-help"></i></a><a href="#" class="sb-version">' . SB_VERSION . '</a>' ?> 
+                    <?php if ($is_admin && (!$is_cloud || defined('SB_CLOUD_DOCS'))) echo '<a href="' . ($is_cloud ? SB_CLOUD_DOCS : 'http://board.support/docs') . '" target="_blank" class="sb-docs"><i class="sb-icon-help"></i></a><a href="#" class="sb-version">' . SB_VERSION . '</a>' ?> 
                 </div>
                 <div class="sb-mobile">
-                    <?php if ($is_admin) echo '<a href="#" class="edit-profile">' . sb_('Edit profile') . '</a><a href="#" class="sb-docs">' . sb_('Docs') . '</a><a href="#" class="sb-version">' . sb_('Updates') . '</a>' ?>
+                    <?php if ($is_admin) echo '<a href="#" class="edit-profile">' . sb_('Edit profile') . '</a>'  . ($is_cloud ? ('<a href="#" data-value="account">' . sb_('Account') . '</a>') : '') . '<a href="#" class="sb-docs">' . sb_('Docs') . '</a><a href="#" class="sb-version">' . sb_('Updates') . '</a>' ?>
                     <a href="#" class="sb-online" data-value="status"><?php sb_e('Online') ?></a>
                     <a href="#" class="logout"><?php sb_e('Logout') ?></a>
                 </div>
@@ -729,7 +728,7 @@ function sb_component_admin() {
                                         </a>
                                     </li>
                                     <li>
-                                        <a data-value="transcript" class="sb-btn-icon" data-sb-tooltip="<?php sb_e('Download transcript') ?>">
+                                        <a data-value="transcript" class="sb-btn-icon" data-sb-tooltip="<?php sb_e('Transcript') ?>" data-action="<?php echo sb_get_multi_setting('transcript', 'transcript-action') ?>">
                                             <i class="sb-icon-download"></i>
                                         </a>
                                     </li>
@@ -738,7 +737,7 @@ function sb_component_admin() {
                                             <i class="sb-icon-back"></i>
                                         </a>
                                     </li>
-                                    <?php if ($is_admin) echo '<li><a data-value="delete" class="sb-btn-icon sb-btn-red" data-sb-tooltip="' . sb_('Delete conversation') . '"><i class="sb-icon-delete"></i></a></li><li><a data-value="empty-trash" class="sb-btn-icon sb-btn-red" data-sb-tooltip="' . sb_('Empty trash') . '"><i class="sb-icon-delete"></i></a></li>' ?>
+                                    <?php if ($is_admin || sb_get_setting('agents-delete')) echo '<li><a data-value="delete" class="sb-btn-icon sb-btn-red" data-sb-tooltip="' . sb_('Delete conversation') . '"><i class="sb-icon-delete"></i></a></li><li><a data-value="empty-trash" class="sb-btn-icon sb-btn-red" data-sb-tooltip="' . sb_('Empty trash') . '"><i class="sb-icon-delete"></i></a></li>' ?>
                                 </ul>
                             </div>
                         </div>
@@ -1099,6 +1098,8 @@ function sb_component_admin() {
                                                 <ul>
                                                     <li data-value="front" class="sb-active"><?php sb_e('Front End') ?></li>
                                                     <li data-value="admin"><?php sb_e('Admin') ?></li>
+                                                    <li data-value="admin/js"><?php sb_e('Client side admin') ?></li>
+                                                    <li data-value="admin/settings"><?php sb_e('Settings') ?></li>
                                                 </ul>
                                             </div>
                                             <a class="sb-btn sb-icon sb-add-translation"><i class="sb-icon-plus"></i><?php sb_e('New translation') ?></a>
@@ -1165,16 +1166,16 @@ function sb_component_admin() {
                                     <?php sb_e('Registrations') ?>
                                 </li>
                                 <li id="agents-response-time">
-                                    <?php sb_e('Agents response time') ?>
+                                    <?php sb_e('Agent response time') ?>
                                 </li>
                                 <li id="agents-conversations">
-                                    <?php sb_e('Agents conversations') ?>
+                                    <?php sb_e('Agent conversations') ?>
                                 </li>
                                 <li id="agents-conversations-time">
-                                    <?php sb_e('Agents conversations time') ?>
+                                    <?php sb_e('Agent conversations time') ?>
                                 </li>
                                 <li id="agents-ratings">
-                                    <?php sb_e('Agents ratings') ?>
+                                    <?php sb_e('Agent ratings') ?>
                                 </li>
                                 <li id="countries">
                                     <?php sb_e('Countries') ?>
@@ -1211,13 +1212,13 @@ function sb_component_admin() {
                                     <?php sb_e('Searches') ?>
                                 </li>
                                 <li id="articles-views">
-                                    <?php sb_e('Articles views') ?>
+                                    <?php sb_e('Article views') ?>
                                 </li>
                                 <li id="articles-views-single">
-                                    <?php sb_e('Articles views by article') ?>
+                                    <?php sb_e('Article views by article') ?>
                                 </li>
                                  <li id="articles-ratings">
-                                    <?php sb_e('Articles ratings') ?>
+                                    <?php sb_e('Article ratings') ?>
                                 </li>
                             </ul>
                         </div>
@@ -1247,9 +1248,11 @@ function sb_component_admin() {
                   if (defined('SB_DIALOGFLOW')) sb_dialogflow_intent_box();
                   if (!sb_get_setting('disable-notes')) sb_notes_box();
                   if ($is_admin) {
-                      sb_updates_box();
-                      sb_requirements_box();
-                      sb_app_box();
+                      if (!$is_cloud) {
+                          sb_updates_box();
+                          sb_requirements_box();
+                          sb_app_box();
+                      }
                       sb_languages_box();
                   }
 
@@ -1271,6 +1274,7 @@ function sb_component_admin() {
     <?php 
     if (!empty(sb_get_setting('custom-js')) && !$is_cloud) echo '<script id="sb-custom-js" src="' . sb_get_setting('custom-js') . '"></script>';
     if (!empty(sb_get_setting('custom-css')) && !$is_cloud) echo '<link id="sb-custom-css" rel="stylesheet" type="text/css" href="' . sb_get_setting('custom-css') . '" media="all">';
+    if ($is_cloud) sb_cloud_css_js();
     ?>
 <?php } ?>
 <?php

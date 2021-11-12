@@ -97,7 +97,7 @@
         let element = $(this).hasClass('sb-language-switcher-cnt') ? $(this) : $(this).find('.sb-language-switcher-cnt');
         for (var i = 0; i < langs.length; i++) {
             if (added.includes(langs[i])) continue;
-            code += `<span ${active_language == langs[i] ? 'class="sb-active" ' : ''}data-language="${langs[i]}"><i class="sb-icon-close"></i><img src="${SB_URL}/media/flags/languages/${langs[i].toLowerCase()}.png" /></span>`;
+            code += `<span ${active_language == langs[i] ? 'class="sb-active" ' : ''}data-language="${langs[i]}"><i class="sb-icon-close"></i><img src="${SB_URL}/media/flags/${langs[i].toLowerCase()}.png" /></span>`;
             added.push(langs[i]);
         }
         element.find('.sb-language-switcher').remove();
@@ -196,11 +196,7 @@
 
     // Support Board js translations
     function sb_(text) {
-        if (SB_TRANSLATIONS != false && !SBF.null(SB_TRANSLATIONS[text])) {
-            return SB_TRANSLATIONS[text];
-        } else {
-            return text;
-        }
+        return SB_TRANSLATIONS && text in SB_TRANSLATIONS ? SB_TRANSLATIONS[text] : text;
     }
 
     // PWA functions
@@ -236,9 +232,9 @@
         };
     }
 
-    function scrollPagination(area, check = false) {
+    function scrollPagination(area, check = false, offset = 0) {
         if (check) return $(area).scrollTop() + $(area).innerHeight() >= $(area)[0].scrollHeight;
-        $(area).scrollTop($(area)[0].scrollHeight);
+        $(area).scrollTop($(area)[0].scrollHeight - offset);
     }
 
     // Save a browser history state
@@ -278,12 +274,15 @@
                     let code = '';
                     let area = conversations_area.find('.sb-conversation .sb-list');
                     let is_bottom = area[0].scrollTop === (area[0].scrollHeight - area[0].offsetHeight);
+                    let last_conversation_message = SBChat.conversation && SBChat.conversation.getLastMessage() ? SBChat.conversation.getLastMessage().message : false;
                     if (response['token'] && this.token != response['token']) {
                         this.token = response['token'];
                         SBF.storage('dialogflow-token', response['token']);
                     }
                     for (var i = 0; i < suggestions.length; i++) {
-                        code += `<span>${suggestions[i]}</span>`;
+                        if (suggestions[i] != last_conversation_message) {
+                            code += `<span>${suggestions[i]}</span>`;
+                        }
                     }
                     this.smart_reply_data = response['smart_reply'];
                     suggestions_area.html(code);
@@ -452,7 +451,7 @@
         messenger: {
 
             check: function (conversation) {
-                return conversation.get('source') == 'fb';
+                return ['fb', 'ig'].includes(conversation.get('source'));
             },
 
             send: function (PSID, facebook_page_id, message, attachments = [], metadata, onSuccess = false) {
@@ -491,7 +490,7 @@
             }
         },
 
-        sms: {
+	sms: {
 
             check: function (conversation) {
                 return conversation.get('source') == 'sm';
@@ -626,7 +625,7 @@
             conversationPanel: function () {
                 let wp_user_id = activeUser().getExtra('wp-id');
                 if (!this.panel) this.panel = conversations_area.find('.sb-panel-armember');
-                if (!loading(this.panel) && !SBF.null(wp_user_id)) {
+                if (!SBF.null(wp_user_id) && !loading(this.panel)) {
                     let code = '';
                     let subscriptions;
                     wp_user_id = wp_user_id.value;
@@ -845,7 +844,7 @@
                 case 'messenger':
                 case 'whatsapp':
                 case 'sms':
-                case 'woocommerce':
+		case 'woocommerce':
                 case 'dialogflow':
                 case 'slack':
                 case 'tickets': return typeof SB_VERSIONS[name] != ND && SB_VERSIONS[name] != -1;
@@ -1287,6 +1286,7 @@
                     this.updateSelect();
                     if (onSuccess) onSuccess(response);
                 });
+                if (SBApps.is('dialogflow')) SBF.ajax({ function: 'dialogflow-knowledge', articles: this.articles });
             },
 
             show: function (article_id = false, element = false, language = false) {
@@ -1588,7 +1588,7 @@
                             code += `<h2>${sb_((i == 1 ? 'Primary' : (i == 2 ? 'Secondary' : 'Tertiary')) + ' color')}</h2><div data-type="color" class="sb-input-setting sb-type-color"><div class="input"><input data-id="color_${i}" type="text"><i class="sb-close sb-icon-close"></i></div></div>`;
                         }
                         for (var i = 1; i < 4; i++) {
-                            code += `<h2>${sb_(i == 1 ? 'Header background image' : (i == 2 ? 'Header brand image' : 'Chat button icon'))}</h2><div data-type="upload-image" class="sb-input-setting sb-type-upload-image"><div class="input"><div data-id="${sb_(i == 1 ? 'background' : (i == 2 ? 'brand' : 'icon'))}" class="image"><i class="sb-icon-close"></i></div></div></div>`;
+                            code += `<h2>${sb_(i == 1 ? 'Header background image' : (i == 2 ? 'Header brand image' : 'Chat button icon'))}</h2><div data-type="upload-image" class="sb-input-setting sb-type-upload-image"><div class="input"><div data-id="${i == 1 ? 'background' : (i == 2 ? 'brand' : 'icon')}" class="image"><i class="sb-icon-close"></i></div></div></div>`;
                         }
                         break;
                 }
@@ -1771,6 +1771,26 @@
                 }
             },
 
+            updateActive: function () {
+                let area = settings_area.find('.sb-translations-list')
+                let translations = { 'front': {}, 'admin': {}, 'admin/js': {}, 'admin/settings': {} };
+                let language_code = area.attr('data-value');
+                if (SBF.null(language_code)) return;
+                for (var key in translations) {
+                    area.find(' > [data-area="' + key + '"] .sb-input-setting:not(.sb-new-translation)').each(function () {
+                        translations[key][$(this).find('label').html()] = $(this).find('input').val();
+                    });
+                    area.find('> [data-area="' + key + '"] .sb-new-translation').each(function () {
+                        let original = $(this).find('input:first-child').val();
+                        let value = $(this).find('input:last-child').val();
+                        if (original && value) {
+                            translations[key][original] = value;
+                        }
+                    });
+                }
+                this.to_update[language_code] = translations;
+            },
+
             save: function (setting, language = false) {
                 setting = SBSettings.getSettingObject(setting);
                 let values = {};
@@ -1792,16 +1812,6 @@
                 }
             },
 
-            getLanguageCodes: function (setting_id) {
-                let languages = [];
-                for (var key in this.translations) {
-                    if (setting_id in this.translations[key]) {
-                        languages.push(key);
-                    }
-                }
-                return languages;
-            },
-
             load: function (language_code) {
                 let area = settings_area.find('.sb-translations > .sb-content');
                 area.find(' > .sb-hide').removeClass('sb-hide');
@@ -1810,19 +1820,17 @@
                     function: 'get-translation',
                     language_code: language_code
                 }, (translations) => {
-                    if (language_code in this.to_update) translations = this.to_update[language_code]
+                    if (language_code in this.to_update) translations = this.to_update[language_code];
                     let code = '';
-                    let front = translations['front'];
-                    let admin = translations['admin'];
-                    code += `<div class="sb-active" data-area="front">`;
-                    for (var key_front in front) {
-                        code += `<div class="sb-input-setting sb-type-text"><label>${key_front}</label><div><input type="text" value="${front[key_front]}"></div></div>`;
+                    let areas = ['front', 'admin', 'admin/js', 'admin/settings'];
+                    for (var i = 0; i < areas.length; i++) {
+                        let translations_area = translations[areas[i]];
+                        code += `<div class="sb-active" data-area="${areas[i]}">`;
+                        for (var key in translations_area) {
+                            code += `<div class="sb-input-setting sb-type-text"><label>${key}</label><div><input type="text" value="${translations_area[key]}"></div></div>`;
+                        }
+                        code += '</div>';
                     }
-                    code += `</div><div data-area="admin">`;
-                    for (var key_admin in admin) {
-                        code += `<div class="sb-input-setting sb-type-text"><label>${key_admin}</label><div><input type="text" value="${admin[key_admin]}"></div></div>`;
-                    }
-                    code += '</div>';
                     area.find('.sb-translations-list').attr('data-value', language_code).html(code);
                     area.find('.sb-menu-wide li').sbActivate(false).eq(0).sbActivate(true);
                     area.sbLoading(false);
@@ -1830,24 +1838,14 @@
                 area.sbLoading(true);
             },
 
-            updateActive: function () {
-                let area = settings_area.find('.sb-translations-list')
-                let translations = { 'front': {}, 'admin': {} };
-                let language_code = area.attr('data-value');
-                if (SBF.null(language_code)) return;
-                for (var key in translations) {
-                    area.find(' > [data-area="' + key + '"] .sb-input-setting:not(.sb-new-translation)').each(function () {
-                        translations[key][$(this).find('label').html()] = $(this).find('input').val();
-                    });
-                    area.find('> [data-area="' + key + '"] .sb-new-translation').each(function () {
-                        let original = $(this).find('input:first-child').val();
-                        let value = $(this).find('input:last-child').val();
-                        if (original && value) {
-                            translations[key][original] = value;
-                        }
-                    });
+            getLanguageCodes: function (setting_id) {
+                let languages = [];
+                for (var key in this.translations) {
+                    if (setting_id in this.translations[key]) {
+                        languages.push(key);
+                    }
                 }
-                this.to_update[language_code] = translations;
+                return languages;
             }
         }
     }
@@ -1930,7 +1928,7 @@
             let index = data[Object.keys(data)[0]].length - 1;
             let list = [];
             for (var i = 0; i < header.length; i++) {
-                code += `<th>${sb_(header[i])}</th>`;
+                code += `<th>${header[i]}</th>`;
             }
             code += '</tr></thead><tbody>';
             for (var key in data) {
@@ -2322,19 +2320,12 @@
         // Update user and agent activity status
         updateUsersActivity: function () {
             SBF.updateUsersActivity(agent_online ? SB_ACTIVE_AGENT['id'] : -1, activeUser() ? activeUser().id : -1, function (response) {
-                if (response == 'online') {
-                    let labels = conversations_area.find('.sb-conversation .sb-top > .sb-labels');
-                    if (!labels.find('.sb-status-online').length) labels.prepend(`<span class="sb-status-online">${sb_('Online')}</span>`);
-                    SBChat.user_online = true;
-                } else {
-                    conversations_area.find('.sb-conversation .sb-top .sb-status-online').remove();
-                    SBChat.user_online = false;
-                }
+                SBUsers.setActiveUserStatus(response == 'online');
             });
         },
 
         // Set active agent status
-        setActiveAgentStatus: function (online) {
+        setActiveAgentStatus: function (online = true) {
             agent_online = online;
             header.find('[data-value="status"]').html(sb_(online ? 'Online' : 'Offline')).attr('class', online ? 'sb-online' : 'sb-offline');
             if (SBPusher.active) {
@@ -2344,6 +2335,14 @@
                     SBPusher.presenceUnsubscribe();
                 }
             }
+        },
+
+        // Set active user status
+        setActiveUserStatus: function (online = true) {
+            let labels = conversations_area.find('.sb-conversation .sb-top > .sb-labels');
+            labels.find('.sb-status-online').remove();
+            if (online) labels.prepend(`<span class="sb-status-online">${sb_('Online')}</span>`);
+            SBChat.user_online = online;
         }
     }
 
@@ -2842,11 +2841,15 @@
         },
 
         // Transcript generation and download
-        transcript: function (conversation_id) {
+        transcript: function (conversation_id, action = false) {
+            if (action == 'email' && (!activeUser() || !activeUser().get('email'))) return false;
             SBF.ajax({
                 function: 'transcript',
                 conversation_id: conversation_id
-            }, (response) => window.open(response));
+            }, (response) => {
+                if (action == 'email') SBChat.sendEmail(SB_ADMIN_SETTINGS['transcript-message'], [[response, response]], true);
+                else window.open(response);
+            });
         },
 
         // Set the typing status
@@ -3196,7 +3199,7 @@
                 // Show the edit box
                 this.boxClasses(profile_edit_box, current_user_type);
                 profile_edit_box.sbShowLightbox();
-                SBF.event('SBProfileEditBoxOpened', { user_id: user_id });
+                SBF.event('SBProfileEditBoxOpened', { user_id: user.id });
             } else {
                 SBF.error('User not of type SBUser', 'SBUsers.showEdit');
                 return false;
@@ -3211,7 +3214,7 @@
                 let source = SBChat.conversation.get('source');
                 code = this.profileRow('conversation-id', SBChat.conversation.id, sb_('Conversation ID'));
                 if (!SBF.null(source)) {
-                    code += this.profileRow('conversation-source', source == 'fb' ? 'Facebook' : (source == 'wa' ? 'WhatsApp' : (source == 'sm' ? 'SMS' : source)), sb_('Source'));
+                    code += this.profileRow('conversation-source', source == 'fb' ? 'Facebook' : (source == 'wa' ? 'WhatsApp' : (source == 'sm' ? 'SMS' : (source == 'tm' ? 'Text message' : (source == 'ig' ? 'Instagram' : source)))), sb_('Source'));
                 }
             }
             if (SB_ACTIVE_AGENT['user_type'] != 'admin') {
@@ -3262,7 +3265,7 @@
                 case 'country_code':
                 case 'language':
                 case 'browser_language':
-                    icon = `<img src="${SB_URL}/media/flags/${key == 'country_code' ? 'countries' : 'languages'}/${value.toLowerCase()}.png" />`;
+                    icon = `<img src="${SB_URL}/media/flags/${value.toLowerCase()}.png" />`;
                     break;
                 case 'browser':
                     lowercase = value.toLowerCase();
@@ -3350,7 +3353,7 @@
                     let total = response[0] + response[1];
                     let positive = response[0] * 100 / total;
                     let negative = response[1] * 100 / total;
-                    code = `<div><div>${sb_('Positive')}</div><span data-count="${response[0]}" style="width: ${Math.round(positive * 2)}px"></span><div>${positive.toFixed(2)} %</div></div><div><div>${sb_('Negative')}</div><span data-count="${response[1]}" style="width: ${Math.round(negative * 2)}px"></span><div>${negative.toFixed(2)} %</div></div><p class="sb-rating-count">${total} ${sb_('Ratings')}</p>`;
+                    code = `<div><div>${sb_('Helpful')}</div><span data-count="${response[0]}" style="width: ${Math.round(positive * 2)}px"></span><div>${positive.toFixed(2)} %</div></div><div><div>${sb_('Not helpful')}</div><span data-count="${response[1]}" style="width: ${Math.round(negative * 2)}px"></span><div>${negative.toFixed(2)} %</div></div><p class="sb-rating-count">${total} ${sb_('Ratings')}</p>`;
                 }
                 area.find('.sb-rating-area').html(code).sbLoading(false);
             });
@@ -4029,7 +4032,7 @@
                     message = 'All conversations in the trash (including their messages) will be deleted permanently.'
                     break;
                 case 'transcript':
-                    SBConversations.transcript(conversation_id);
+                    SBConversations.transcript(conversation_id, $(this).attr('data-action'));
                     break;
                 case 'read':
                     status_code = 0;
@@ -4051,15 +4054,16 @@
                                 }
                             }
                         }
+                        if (SB_ADMIN_SETTINGS['close-message'] && status_code == 3) {
+                            SBF.ajax({ function: 'close-message', conversation_id: conversation_id, bot_id: SB_ADMIN_SETTINGS['bot-id'] });
+                            if (SB_ADMIN_SETTINGS['close-message-transcript']) SBConversations.transcript(conversation_id, 'email');
+                        }
                         if (value == 'read') {
                             conversations_admin_list_ul.find('.sb-active').attr('data-conversation-status', 0);
                             conversations_area.find('.sb-top [data-value="read"]').sbActivate(false);
                         } else {
                             conversations_admin_list.find('.sb-select li.sb-active').click();
                             conversations_admin_list.find('.sb-select ul').sbActivate(false);
-                        }
-                        if (SB_ADMIN_SETTINGS['close-message'] && status_code == 3) {
-                            SBF.ajax({ function: 'close-message', conversation_id: conversation_id, bot_id: SB_ADMIN_SETTINGS['bot-id'] });
                         }
                     });
                     if (SBChat.conversation && SBChat.conversation.id == conversation_id) SBChat.conversation.set('conversation_status_code', status_code);
@@ -4131,7 +4135,7 @@
                         }
                         pagination++;
                         conversations_admin_list_ul.append(code);
-                        scrollPagination(this);
+                        scrollPagination(this, false, 600);
                     }
                     parent.find(' > .sb-loading').remove();
                     SBF.event('SBAdminConversationsLoaded', { conversations: response });
@@ -4183,7 +4187,7 @@
                     }
                 });
             }
-            if (SB_ADMIN_SETTINGS['smart-reply']) {
+	    if (SB_ADMIN_SETTINGS['smart-reply']) {
                 suggestions_area.html('');
             }
             if (SB_ADMIN_SETTINGS['assign-conversation-to-agent'] && SBChat.conversation && SBChat.conversation.id == conversation_id && SBF.null(SBChat.conversation.get('agent_id'))) {
@@ -4198,11 +4202,12 @@
         $(document).on('SBNewMessagesReceived', function (e, response) {
             let payload = response.get('payload');
             let area = conversations_area.find('.sb-conversation');
+            let agent = SBF.isAgent(response.get('user_type'));
             setTimeout(function () {
                 area.find('.sb-top .sb-status-typing').remove();
             }, 300);
             if (SB_ADMIN_SETTINGS['smart-reply']) {
-                if (SBF.isAgent(response.get('user_type'))) {
+                if (agent) {
                     if (SB_ADMIN_SETTINGS['smart-reply-agent-assistant']) SBApps.dialogflow.smartReplyUpdate(response.message);
                 } else {
                     SBApps.dialogflow.smartReply(response.message);
@@ -4250,6 +4255,9 @@
             if ('whatsapp-template-fallback' in payload && !('whatsapp-fallback' in payload)) {
                 showResponse('The user has been notified via WhatsApp Template notification.');
             }
+            if (!agent && SBChat.conversation.id == response.get('conversation_id') && !SBChat.user_online) {
+                SBUsers.setActiveUserStatus();
+            }
             SBConversations.update();
         });
 
@@ -4259,12 +4267,12 @@
         });
 
         // Event: email notification sent
-        $(document).on('SBEmailSent', function (e, response) {
+        $(document).on('SBEmailSent', function () {
             showResponse(`The user has been notified by email.`);
         });
 
         // Event: SMS notification sent
-        $(document).on('SBSMSSent', function (e, response) {
+        $(document).on('SBSMSSent', function () {
             showResponse('The user has been notified by text message.');
         });
 
@@ -4348,10 +4356,13 @@
         });
 
         $(admin).on('click', '.sb-profile-list [data-id="conversation-source"]', function () {
-            if ($(this).find('img').attr('src').indexOf('whatsapp') && activeUser().getExtra('phone')) {
+            let source = $(this).find('label').html().toLowerCase();
+            if (source == 'whatsapp' && activeUser().getExtra('phone')) {
                 window.open('https://wa.me/' + SBApps.whatsapp.activeUserPhone());
-            } else {
+            } else if (source == 'facebook') {
                 window.open('https://www.facebook.com/messages/t/' + SBChat.conversation.get('extra'));
+            } else if (source == 'instagram') {
+                window.open('https://www.instagram.com/direct/inbox/');
             }
         });
 
@@ -4806,7 +4817,7 @@
                 template: false
             }, (response) => {
                 let user_ids_length = user_ids.length;
-                direct_message_box.find('.sb-bottom > div').html(sb_(`Sending ${settings[1]}... ${i + 1} / ${user_ids_length}`));
+                direct_message_box.find('.sb-bottom > div').html(`${sb_('Sending')} ${settings[1]}... ${i + 1} / ${user_ids_length}`);
                 if (!response) console.warn(response);
                 if (response !== true && 'status' in response && response.status == 400) {
                     dialog(`${response.message}. Details at ${response.more_info}`, 'info');
@@ -5130,14 +5141,14 @@
             e.preventDefault();
         });
 
-        // SMS
+	// SMS
         $(settings_area).on('click', '#sms-twilio-btn .sb-btn', function (e) {
             dialog(SB_URL + '/apps/sms/post.php', 'info');
             return false;
             e.preventDefault();
         });
 
-        // WordPress
+	// WordPress
         $(settings_area).on('click', '#wp-sync .sb-btn', function (e) {
             if (loading(this)) return;
             SBApps.wordpress.ajax('wp-sync', {}, (response) => {
@@ -5164,7 +5175,7 @@
                 let code = '';
                 for (var key in SB_LANGUAGE_CODES) {
                     if (key == 'en') continue;
-                    code += `<li data-code="${key}"><img src="${SB_URL}/media/flags/languages/${key}.png" />${SB_LANGUAGE_CODES[key]}</li>`;
+                    code += `<li data-code="${key}"><img src="${SB_URL}/media/flags/${key}.png" />${SB_LANGUAGE_CODES[key]}</li>`;
                 }
                 nav.html(code);
             }
@@ -5469,7 +5480,7 @@
             active_languages.push('en');
             for (var key in SB_LANGUAGE_CODES) {
                 if (!active_languages.includes(key)) {
-                    code += `<div data-language="${key}"><img src="${SB_URL}/media/flags/languages/${key}.png" />${sb_(SB_LANGUAGE_CODES[key])}</div>`;
+                    code += `<div data-language="${key}"><img src="${SB_URL}/media/flags/${key}.png" />${sb_(SB_LANGUAGE_CODES[key])}</div>`;
                 }
             }
             language_switcher_target = switcher;
@@ -5502,7 +5513,7 @@
         $(admin).on('click', '.sb-language-switcher span > i', function () {
             let item = $(this).parent();
             let language = item.attr('data-language');
-            dialog(`The ${sb_(SB_LANGUAGE_CODES[language])} translation will be deleted.`, 'alert', () => {
+            dialog(sb_('The {T} translation will be deleted.').replace('{T}', sb_(SB_LANGUAGE_CODES[language])), 'alert', () => {
                 switch (item.parent().attr('data-source')) {
                     case 'articles':
                         SBSettings.articles.deleteTranslation(false, language);

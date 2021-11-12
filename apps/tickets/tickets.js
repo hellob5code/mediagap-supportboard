@@ -160,7 +160,7 @@
                 $(main).find('.sb-panel-right .sb-scroll-area > div').sbActivate(false);
 
                 // Set the agent details
-                if (last_agent != false) {
+                if (last_agent) {
                     $(agent_profile).setProfile(last_agent['full_name'], last_agent['profile_image']);
                     this.setAgent(last_agent['user_id']);
                     setTimeout(function () {
@@ -322,7 +322,7 @@
             if (message instanceof SBMessage && message.get('conversation_id') == SBChat.conversation.id) {
                 let last_agent = SBChat.lastAgent();
                 $(SBTickets.getActiveConversation()).html(SBChat.conversation.getCode());
-                if (last_agent != false && SBF.isAgent(message.get('user_type')) && last_agent.id != message.get('user_id')) {
+                if (last_agent && SBF.isAgent(message.get('user_type')) && last_agent.id != message.get('user_id')) {
                     SBTickets.setAgent(message.get('user_id'));
                 }
             }
@@ -465,7 +465,7 @@
                 SBForm.showErrorMessage(panel, 'Please fill in all the required fields.');
                 errors = true;
             }
-            if ($(editor).find('textarea').val().trim() == '') {
+            if (!$(editor).find('textarea').val().trim()) {
                 if (!errors) {
                     SBForm.showErrorMessage(panel, 'Please write a message.');
                 }
@@ -479,8 +479,8 @@
                 SBChat.clear();
                 SBChat.activateBar(false);
                 for (var key in settings) {
-                    if (settings[key][1] != '' && settings[key][0] != '') {
-                        message += `*${sb_(settings[key][1])}*\n${settings[key][0]}\n\n`;
+                    if (settings[key][1] && settings[key][0]) {
+                        message += `*${sb_(settings[key][1])}*\n${key == 'department' ? panel.find('#department li.sb-active').html() : settings[key][0]}\n\n`;
                     }
                 }
                 message += $(editor).find('textarea').val().trim();

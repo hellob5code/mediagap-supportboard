@@ -77,7 +77,7 @@ function sb_component_chat() {
     if (sb_get_setting('rtl') || in_array(sb_get_user_language(), ['ar', 'he', 'ku', 'fa', 'ur'])) $css .= ' sb-rtl';
     if (sb_get_setting('chat-position') == 'left') $css .= ' sb-chat-left';
     if ($disable_dashboard) $css .= ' sb-dashboard-disabled';
-    if (defined('SB_CLOUD_LOGO')) $css .= ' sb-cloud';
+    if (defined('SB_CLOUD')) $css .= ' sb-cloud';
     if (empty($icon)) {
         $icon = sb_get_setting('chat-sb-icons');
         if (!empty($icon)) {
@@ -93,10 +93,10 @@ function sb_component_chat() {
                 <div class="sb-content">
                     <?php if ($header_type == 'brand') echo '<div class="sb-brand"><img src="' . sb_get_setting('brand-img') . '" alt="" /></div>' ?>
                     <div class="sb-title">
-                        <?php echo sb_($header_headline != '' ? $header_headline : 'Support Board Chat') ?>
+                        <?php echo sb_($header_headline ? $header_headline : 'Support Board Chat') ?>
                     </div>
                     <div class="sb-text">
-                        <?php echo sb_($header_message != '' ? $header_message : 'We are an experienced team that provides fast and accurate answers to your questions.') ?>
+                        <?php echo sb_($header_message ? $header_message : 'We are an experienced team that provides fast and accurate answers to your questions.') ?>
                     </div>
                     <?php
 
@@ -128,7 +128,7 @@ function sb_component_chat() {
             <div class="sb-panel sb-panel-articles"></div>
         </div>
         <?php sb_component_editor() ?>
-        <?php if (defined('SB_CLOUD_LOGO')) echo '<a href="https://board.support/" target="_blank" class="sb-cloud-brand"><img src="' . SB_CLOUD_LOGO . '" /></a>' ?>
+        <?php if (defined('SB_CLOUD_BRAND_LOGO')) echo '<a href="' . SB_CLOUD_BRAND_LOGO_LINK . '" target="_blank" class="sb-cloud-brand"><img src="' . SB_CLOUD_BRAND_LOGO . '" /></a>' ?>
     </div>
     <div class="sb-chat-btn">
         <span data-count="0"></span>

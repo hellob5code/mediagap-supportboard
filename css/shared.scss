@@ -654,7 +654,7 @@ div ul.sb-menu, .sb-select ul, .sb-popup, .sb-menu-mobile > ul, .sb-menu-mobile 
         font-weight: 400;
         resize: none !important;
         border: none !important;
-        color: $color-gray;
+        color: $color-gray !important;
         background: transparent !important;
         transition: $transition;
         overflow: hidden;
@@ -1104,6 +1104,7 @@ div ul.sb-menu, .sb-select ul, .sb-popup, .sb-menu-mobile > ul, .sb-menu-mobile 
             border: 1px solid $color-blue;
             box-shadow: 0 0 5px rgba(39, 156, 255, 0.2);
             background: $white;
+            color: $color-black;
             outline: none !important;
         }
 
@@ -1838,6 +1839,7 @@ div ul.sb-menu,
             cursor: text;
             padding: 0 10px;
             box-sizing: border-box;
+            z-index: 9;
             transition: top 0.2s;
 
             &.sb-active {

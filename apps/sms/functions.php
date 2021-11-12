@@ -1,5 +1,6 @@
 <?php
 
+
 /*
  * ==========================================================
  * SMS APP
@@ -19,6 +20,7 @@ define('SB_SMS', '1.0.2');
  * Send a SMS message to the user
  *
  */
+
 
 function sb_sms_send_message($to, $message = '', $attachments = []) {
     // twilio sms send message code

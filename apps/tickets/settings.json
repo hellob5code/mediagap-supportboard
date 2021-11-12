@@ -25,12 +25,6 @@
   },
   {
     "type": "checkbox",
-    "id": "tickets-manual-init",
-    "title": "Manual initialization",
-    "content": "Disable auto-initialization of the tickets area. When this setting is active you must initialize the tickets area via Javascript API."
-  },
-  {
-    "type": "checkbox",
     "id": "tickets-articles",
     "title": "Articles",
     "content": "Display the articles section in the right area."
@@ -182,5 +176,11 @@
     "id": "tickets-enter-button",
     "title": "Send message via enter button",
     "content": "Send the message via the ENTER keyboard button."
+  },
+  {
+    "type": "checkbox",
+    "id": "tickets-manual-init",
+    "title": "Manual initialization",
+    "content": "Disable auto-initialization of the tickets area. When this setting is active you must initialize the tickets area with a custom JavaScript API code written by you. If the tickets area doesn't appear and this setting is enabled, disable it."
   }
 ]

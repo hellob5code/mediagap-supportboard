@@ -11,7 +11,7 @@
 
 include_once('../config.php');
 if (defined('SB_CLOUD')) {
-    $data = json_decode(openssl_decrypt(base64_decode($_POST['cloud']), 'AES-256-CBC', hash('sha256', SB_CLOUD_KEY), 0, substr(hash('sha256', 'supportboard_iv'), 0, 16)), true);
+    $data = json_decode(openssl_decrypt(base64_decode(isset($_POST['cloud']) ? $_POST['cloud'] : $_COOKIE['sb-cloud']), 'AES-256-CBC', hash('sha256', SB_CLOUD_KEY), 0, substr(hash('sha256', 'supportboard_iv'), 0, 16)), true);
     require_once(SB_CLOUD_PATH . '/script/config/config_' . $data['token'] . '.php');
 }
 if (defined('SB_CROSS_DOMAIN') && SB_CROSS_DOMAIN) {

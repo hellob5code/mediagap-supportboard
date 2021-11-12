@@ -63,7 +63,7 @@
     "type": "checkbox",
     "id": "dialogflow-multilingual",
     "title": "Multilingual",
-    "content": "Activate the multilingual feature for the bot."
+    "content": "Activate the chatbot multilingual feature."
   },
   {
     "type": "multi-input",
@@ -94,13 +94,19 @@
     "type": "checkbox",
     "id": "dialogflow-timetable",
     "title": "Disable during office hours",
-    "content": "Enable the bot outside of scheduled office hours only."
+    "content": "Enable the chatbot outside of scheduled office hours only."
+  },
+  {
+    "type": "checkbox",
+    "id": "dialogflow-disable-tickets",
+    "title": "Disable for the tickets area",
+    "content": "Disable the chatbot for the tickets area."
   },
   {
     "type": "multi-input",
     "id": "dialogflow-human-takeover",
     "title": "Human takeover",
-    "content": "If the bot doesn't understand a user's question, forwards the conversation to an agent.",
+    "content": "If the chatbot doesn't understand a user's question, forwards the conversation to an agent.",
     "help": "https://board.support/docs/#dialogflow-human-takeover",
     "value": [
       {

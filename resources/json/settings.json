@@ -70,7 +70,7 @@
       "type": "checkbox",
       "id": "chat-manual-init",
       "title": "Manual initialization",
-      "content": "Disable auto-initialization of the chat widget. When this setting is active you must initialize the chat widget via Javascript API."
+      "content": "Disable auto-initialization of the chat widget. When this setting is active you must initialize the chat widget with a custom JavaScript API code written by you. If the chat doesn't appear and this setting is enabled, disable it."
     }
   ],
   "messages": [
@@ -323,6 +323,11 @@
           "title": "Active"
         },
         {
+          "type": "checkbox",
+          "id": "close-transcript",
+          "title": "Send transcript to user's email"
+        },
+        {
           "type": "textarea",
           "id": "close-msg",
           "title": "Message"
@@ -403,6 +408,13 @@
       "background-size": "auto 64px"
     },
     {
+      "type": "upload-image",
+      "id": "admin-icon",
+      "title": "Admin icon",
+      "content": "Replace the Support Board top-left icon on the admin area and the browser favicon.",
+      "background-size": "auto 64px"
+    },
+    {
       "type": "text",
       "id": "login-message",
       "title": "Admin login message",
@@ -418,7 +430,7 @@
       "type": "checkbox",
       "id": "admin-auto-translations",
       "title": "Automatically translate admin area",
-      "content": "Translate the admin area automatically to match the browser language.",
+      "content": "Automatically translate the admin area to match the agent profile language or browser language.",
       "help": "https://board.support/docs/#multilingual-admin"
     },
     {
@@ -441,6 +453,12 @@
     },
     {
       "type": "checkbox",
+      "id": "agents-delete",
+      "title": "Allow agents to delete conversations",
+      "content": "Allow agents to delete conversations and empty the trash."
+    },
+    {
+      "type": "checkbox",
       "id": "rtl-admin",
       "title": "RTL",
       "content": "Activate the Right-To-Left (RTL) reading layout for the admin area."
@@ -458,13 +476,34 @@
       "content": "Disable the attachments list."
     },
     {
-      "type": "select",
-      "id": "transcript-type",
-      "title": "Transcript type",
-      "content": "Set the default transcript file type.",
+      "type": "multi-input",
+      "id": "transcript",
+      "title": "Transcript",
+      "content": "Transcript settings.",
       "value": [
-        [ "csv", "CSV" ],
-        [ "txt", "Text" ]
+        {
+          "type": "select",
+          "id": "transcript-type",
+          "title": "Type",
+          "value": [
+            [ "csv", "CSV" ],
+            [ "txt", "Text" ]
+          ]
+        },
+        {
+          "type": "select",
+          "id": "transcript-action",
+          "title": "Button action",
+          "value": [
+            [ "download", "Download" ],
+            [ "email", "Send to user's email" ]
+          ]
+        },
+        {
+          "type": "textarea",
+          "id": "transcript-message",
+          "title": "Message"
+        }
       ]
     },
     {
@@ -492,6 +531,13 @@
       "id": "custom-css",
       "title": "Custom CSS",
       "content": "Enter the URL of a .css file, to load it automatically in the admin area."
+    },
+    {
+      "type": "text",
+      "id": "manifest-url",
+      "title": "Manifest file URL",
+      "content": "Use this option to change the PWA icon.  See the docs for more details.",
+      "help": "https://board.support/docs/#pwa"
     }
   ],
   "notifications": [
@@ -1042,8 +1088,8 @@
     {
       "type": "checkbox",
       "id": "duplicate-emails",
-      "title": "Allow duplicate emails",
-      "content": "Allow registration with an email already used by creating a new user without email."
+      "title": "Allow duplicate emails and phone numbers",
+      "content": "Allow registration with an email and a phone number already registered."
     },
     {
       "type": "text",
@@ -1234,7 +1280,7 @@
       "type": "multi-input",
       "id": "webhooks",
       "title": "Webhooks",
-      "content": "Webhooks are automated messages sent from Support Board when something happens. They have a message and are sent to a unique URL defined by you. See the API docs for more details.",
+      "content": "Webhooks are information sent in background to a unique URL defined by you when something happens. See the API docs for more details.",
       "value": [
         {
           "type": "checkbox",
@@ -1554,7 +1600,7 @@
       "type": "button",
       "id": "sb-export-settings",
       "title": "Export settings",
-      "content": "Export Support Board settings.",
+      "content": "Export all settings.",
       "button-text": "Export Settings",
       "button-url": "#"
     },
@@ -1562,7 +1608,7 @@
       "type": "button",
       "id": "sb-import-settings",
       "title": "Import settings",
-      "content": "Import settings into Support Board.",
+      "content": "Import all settings.",
       "button-text": "Import Settings",
       "button-url": "#"
     }

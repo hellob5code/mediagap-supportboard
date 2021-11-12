@@ -1521,6 +1521,10 @@ div ul.sb-menu li:hover,
         }
     }
 
+    .sb-article .sb-content {
+        font-size: 14px;
+    }
+
     .sb-articles, .sb-article {
         animation: sb-fade-animation .5s;
     }
@@ -1563,8 +1567,9 @@ div ul.sb-menu li:hover,
             content: "";
             position: absolute;
             left: -10px;
-            top: 2px;
-            height: 11px;
+            top: 50%;
+            margin-top: -6px;
+            height: 12px;
             width: 1px;
             background: $color-blue;
         }

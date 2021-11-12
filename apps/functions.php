@@ -661,7 +661,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
                         sb_whatsapp_send_message($extra['phone'], $messages[$i]['message'], sb_isset($messages[$i], 'attachments'));
                     }
                     break;
-                case 'sm':
+		        case 'sm':
                     for ($i = 0; $i < count($messages); $i++) {
                         sb_sms_send_message($extra['phone'], $messages[$i]['message'], sb_isset($messages[$i], 'attachments'));
                     }
@@ -682,7 +682,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
             case 'wa':
                 sb_whatsapp_send_message($extra['phone'], $payload['redirect']);
                 break;
-            case 'sm':
+	        case 'sm':
                 sb_sms_send_message($extra['phone'], $payload['redirect']);
                 break;
         }
@@ -698,7 +698,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
             case 'wa':
                 sb_whatsapp_send_message($extra['phone'], $transcript_url);
                 break;
-            case 'sm':
+	        case 'sm':
                 sb_sms_send_message($extra['phone'], $transcript_url);
                 break;
         }

@@ -9,7 +9,7 @@
  *
  */
 
-define('SB_DIALOGFLOW', '1.1.9');
+define('SB_DIALOGFLOW', '1.2.0');
 
 /*
  * -----------------------------------------------------------
@@ -195,6 +195,12 @@ function sb_dialogflow_message($conversation_id = false, $message = '', $token =
     $messages = sb_isset($response_query, 'fulfillmentMessages', sb_isset($response_query, 'responseMessages', []));
     $unknow_answer = sb_isset($response_query, 'action') == 'input.unknown' || (isset($response_query['match']) && $response_query['match']['matchType'] == 'NO_MATCH');
     $results = [];
+    if (!$messages && isset($response_query['knowledgeAnswers'])) {
+        $messages = sb_isset($response_query['knowledgeAnswers'], 'answers', []);
+        for ($i = 0; $i < count($messages); $i++) {
+            $messages[$i] = ['text' => ['text' => [$messages[$i]['answer']]]];
+        }     
+    }
 
     // Parameters
     $parameters = isset($response_query['parameters']) && count($response_query['parameters']) ? $response_query['parameters'] : [];
@@ -210,7 +216,7 @@ function sb_dialogflow_message($conversation_id = false, $message = '', $token =
     if ($unknow_answer && !sb_is_agent() && sb_get_multi_setting('dialogflow-language-detection', 'dialogflow-language-detection-active') && count(sb_db_get('SELECT id FROM sb_messages WHERE user_id = ' . $user_id . ' LIMIT 3', false)) < 3) {
         $detected_language = sb_google_language_detection($message, $token);
         if ($detected_language != $language[0] && !empty($detected_language)) {
-            $agent = sb_dialogflow_curl('/agent', '', false, 'GET');
+            $agent = sb_dialogflow_get_agent();
             sb_update_user_value($user_id, 'language', $detected_language);
             $response['queryResult']['action'] = 'sb-language-detection';
             if ($detected_language == sb_isset($agent, 'defaultLanguageCode') || in_array($detected_language, sb_isset($agent, 'supportedLanguageCodes', []))) {
@@ -524,7 +530,7 @@ function sb_dialogflow_set_active_context($context_name, $parameters = [], $life
 }
 
 function sb_dialogflow_get_agent() {
-    return sb_dialogflow_curl('/agent/', '', '', 'GET');
+    return sb_dialogflow_curl('/agent', '', '', 'GET');
 }
 
 function sb_dialogflow_language_code($language) {
@@ -605,7 +611,7 @@ function sb_dialogflow_human_takeover($conversation_id, $auto_messages = false) 
         $message = $messages[$i];
         $css = sb_is_agent($messages[$i]) ? ['left', '0 50px 20px 0', '#F0F0F0'] : ['right', '0 0 20px 50px', '#E6F2FC'];
         $attachments = sb_isset($message, 'attachments', []);
-        $code .= '<div style="float:' . $css[0] . ';clear:both;margin:' . $css[1] . ';"><span style="background-color:' . $css[2] . ';padding:10px 15px;display:inline-block;border-radius:4px;margin:0;">' . $message['message'] . '</span>';
+        $code .= '<div style="float:' . $css[0] . ';text-align:' . $css[0] . ';clear:both;margin:' . $css[1] . ';"><span style="background-color:' . $css[2] . ';padding:10px 15px;display:inline-block;border-radius:4px;margin:0;">' . $message['message'] . '</span>';
         if ($attachments) { 
             $code .= '<br>';
             $attachments = json_decode($attachments, true);
@@ -616,7 +622,7 @@ function sb_dialogflow_human_takeover($conversation_id, $auto_messages = false) 
         $code .= '<br><span style="color:rgb(168,168,168);font-size:12px;display:block;margin:10px 0 0 0;">' . $message['first_name'] . ' ' . $message['last_name'] . ' | ' . $message['creation_time'] . '</span></div>';
     }
     $code .= '<div style="clear:both;"></div></div>';
-    sb_send_agents_notifications($recipient_id, $last_message, str_replace('{name}', sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {name} does not know the answer to the user\'s question.')), $conversation_id, false, $data, $data['department'], ['email' => $code]);
+    sb_send_agents_notifications($recipient_id, $last_message, str_replace('{T}', sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {T} does not know the answer to the user\'s question.')), $conversation_id, false, $data, $data['department'], ['email' => $code]);
 
     // Slack
     if (defined('SB_SLACK') && sb_get_setting('slack-active')) {
@@ -651,6 +657,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
         $messages = sb_dialogflow_human_takeover($conversation_id, $extra && isset($extra['source']));
         if ($extra && isset($extra['source'])) {
             switch ($extra['source']) {
+                case 'ig':
                 case 'fb':
                     for ($i = 0; $i < count($messages); $i++) {
                         sb_messenger_send_message($extra['psid'], $extra['page_id'], $messages[$i]['message'], sb_isset($messages[$i], 'attachments'), $messages[$i]['id']);
@@ -671,6 +678,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
     if (isset($payload['redirect']) && $extra) {
         $message_id = sb_send_message(sb_get_bot_id(), $conversation_id, $payload['redirect']);
         switch ($extra['source']) {
+            case 'ig':
             case 'fb':
                 sb_messenger_send_message($extra['psid'], $extra['page_id'], $payload['redirect'], [], $message_id);
                 break;
@@ -684,6 +692,7 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
         $attachments = [[$transcript_url, $transcript_url]];
         $message_id = sb_send_message(sb_get_bot_id(), $conversation_id, '', $attachments);
         switch ($extra['source']) {
+            case 'ig':
             case 'fb':
                 sb_messenger_send_message($extra['psid'], $extra['page_id'], '', $attachments, $message_id);
                 break;
@@ -727,8 +736,7 @@ function sb_dialogflow_smart_reply($message, $smart_reply_data = false, $languag
     } else if ($language_detection) {
         $detected_language = sb_google_language_detection($message, $token);
         if ($detected_language != $language[0] && !empty($detected_language)) {
-            $supported_language_codes = sb_isset(sb_dialogflow_curl('/agent', '', false, 'GET'), 'supportedLanguageCodes', []);
-            if (in_array($detected_language, $supported_language_codes)) {
+            if (in_array($detected_language, sb_isset(sb_dialogflow_get_agent(), 'supportedLanguageCodes', []))) {
                 $detected_language_response = $detected_language;
                 if (isset($_POST['user_id'])) sb_update_user_value($_POST['user_id'], 'language', $detected_language);
                 return sb_dialogflow_smart_reply($message, $smart_reply_data, [$detected_language], $token);
@@ -816,26 +824,63 @@ function sb_dialogflow_smart_reply_generate_conversations_data() {
     }
     return $path;
 }
-//sb_dialogflow_knowledge_articles();
-function sb_dialogflow_knowledge_articles() {
-    // Generate CSV
-   // $knowledge_base_name = sb_isset(sb_dialogflow_curl('/knowledgeBases', ['displayName' => 'Support Board'], false, 'POST'), 'name');
-    $knowledge_base_name = true;
-    if ($knowledge_base_name) {
-        $file_path = SB_PATH . '/uploads/dialogflow_faq.csv';
+
+function sb_dialogflow_knowledge_articles($articles = false, $language = false) {
+    $language = $language ? sb_dialogflow_language_code($language) : false;
+    if (sb_isset(sb_dialogflow_get_agent(), 'defaultLanguageCode') != 'en') return new SBValidationError('language-not-supported');
+    if (!$articles) {
+        $articles = sb_get_articles(-1, false, true, false, 'all');
+        $articles = $articles[0];
+        //$translations = $articles[2];
+        //foreach ($translations as $key => $value) {
+        //    sb_dialogflow_knowledge_articles($value, $key);
+        //}  
+    }    
+    if ($articles) {
+
+        // Create articles file
+        $faq = [];
+        for ($i = 0; $i < count($articles); $i++) {
+            $content = strip_tags($articles[$i]['content']);
+            if (mb_strlen($content) > 150)  { 
+                $content = mb_substr($content, 0, 150);
+                $content = mb_substr($content, 0, mb_strrpos($content, ' ') + 1) . '... [button link="#article-' . $articles[$i]['id'] . '" name="' . sb_('Read more') . '" style="link"]';
+                $content = str_replace(', ...', '...', $content);
+            }
+        	array_push($faq, [$articles[$i]['title'], $content]);
+        }
+        $file_path = sb_upload_path() . '/dialogflow_faq.csv';
+        sb_csv($faq, false, 'dialogflow_faq');
         $file = fopen($file_path, 'r');
         $file_bytes = fread($file, filesize($file_path));
         fclose($file);
- 
-        $t = sb_dialogflow_curl('/knowledgeBases/MTQxODY4MDE3MjA2MTIzNTYwOTY/documents', ['displayName' => 'Support Board', 'mimeType' => 'text/csv', 'knowledgeTypes' => ['FAQ'], 'rawContent' => base64_encode($file_bytes)], false, 'POST');
+        unlink($file_path);
 
-        //$t = sb_dialogflow_curl('/knowledgeBases/' . substr($knowledge_base_name, strripos($knowledge_base_name, '/') + 1) . '/documents', ['displayName' => 'Support Board', 'mimeType' => 'csv', 'knowledgeTypes' => ['FAQ'], 'contentUri' => 'https://sandbox.board.support/test.csv'], false, 'POST');
-        $t = '';
+        // Create new knowledge if not exist
+        $knowledge_base_name = sb_get_external_setting('dialogflow-knowledge', []);
+        if (!isset($knowledge_base_name[$language ? $language : 'default'])) {      
+            $query = ['displayName' => 'Support Board'];
+            if ($language) $query['languageCode'] = $language;
+            $name = sb_isset(sb_dialogflow_curl('/knowledgeBases', $query, false, 'POST'), 'name');   
+            $name = substr($name, strripos($name, '/') + 1);
+            $knowledge_base_name[$language ? $language : 'default'] = $name;
+            sb_save_external_setting('dialogflow-knowledge', $knowledge_base_name);
+            $knowledge_base_name = $name;
+        } else $knowledge_base_name = $knowledge_base_name['default'];
+
+        // Save knowledge in Dialogflow
+        $documents = sb_isset(sb_dialogflow_curl('/knowledgeBases/' . $knowledge_base_name . '/documents', '', false, 'GET'), 'documents', []);
+        for ($i = 0; $i < count($documents); $i++) {
+            $name = $documents[0]['name'];
+            $response = sb_dialogflow_curl(substr($name, stripos($name, 'knowledgeBases/') - 1), '', false, 'DELETE');
+        }
+        $response = sb_dialogflow_curl('/knowledgeBases/' . $knowledge_base_name . '/documents', ['displayName' => 'Support Board', 'mimeType' => 'text/csv', 'knowledgeTypes' => ['FAQ'], 'rawContent' => base64_encode($file_bytes)], false, 'POST');
+        if ($response && isset($response['error']) && sb_isset($response['error'], 'status') == 'NOT_FOUND') {
+            sb_save_external_setting('dialogflow-knowledge', false);
+            return false;
+        }
     }
- 
-
-    // Create or update
-
+    return true;
 }
 
 /*
