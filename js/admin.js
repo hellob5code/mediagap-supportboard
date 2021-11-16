@@ -926,9 +926,18 @@
                         settings: settings,
                         external_settings: external_settings,
                         external_settings_translations: this.translations.translations
-                    }, () => {
-                        showResponse('Settings saved');
-                        $(btn).sbLoading(false);
+                    }, (response) => {
+                        if (response == "STOP_CONVERSATIONS_UPDATE") {
+                            showResponse('Settings saved! Page reload in progress...');
+                            $(btn).sbLoading(false);
+                            setTimeout(function () {
+                                // window.location.href = "/admin.php";
+                                window.location.reload();
+                            }, 1000);
+                        } else {
+                            showResponse('Settings saved');
+                            $(btn).sbLoading(false);
+                        }
                     });
                     break;
             }

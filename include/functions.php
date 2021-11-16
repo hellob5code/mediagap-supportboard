@@ -1418,7 +1418,22 @@ function sb_get_conversations_users($conversations) {
             }
         }
     }
-    return $conversations;
+    return sb_remove_stop_conversations($conversations);
+}
+
+function sb_remove_stop_conversations($conversations) {
+    $is_stop_conversations = sb_get_setting('stop-conversations');
+    if($is_stop_conversations) {
+        $filter_conversations = [];
+        for ($i = 0; $i < count($conversations); $i++) {
+            if(trim(strtolower($conversations[$i]['message'])) !== "stop") {
+                array_push($filter_conversations, $conversations[$i]);
+            }
+        }
+        return $filter_conversations;
+    } else {
+        return $conversations;
+    }
 }
 
 function sb_get_conversations($pagination = 0, $status_code = 0, $routing = false, $routing_unassigned = false) {
@@ -1472,6 +1487,9 @@ function sb_get_conversation($user_id = false, $conversation_id = false) {
                     sb_set_agent_active_conversation($conversation_id);
                 }
                 if (!sb_get_setting('disable-notes')) $details['notes'] = sb_get_notes($conversation_id);
+            }
+            if (trim(strtolower($messages[count($messages) - 1]['message'])) == "stop") {
+                return new SBError('db-error', 'sb_get_conversation', 'No records found');
             }
             return ['messages' => $messages, 'details' => $details];
         }
@@ -2807,9 +2825,15 @@ function sb_save_settings($settings, $external_settings = [], $external_settings
 
             // Update bot
             sb_update_bot($settings['bot-name'][0], $settings['bot-image'][0]);
-
+            
+            // Check whether stop-conversations flag changed or not
+            $stop_conversation = false;
+            if($SB_SETTINGS['stop-conversations'][0] !== filter_var($settings['stop-conversations'][0], FILTER_VALIDATE_BOOLEAN)) {
+                $stop_conversation = true;
+            }
+            
             $SB_SETTINGS = $settings;
-            return true;
+            return $stop_conversation ? "STOP_CONVERSATIONS_UPDATE" : true;
         } else {
             return new SBError('json-encode-error', 'sb_save_settings');
         }
