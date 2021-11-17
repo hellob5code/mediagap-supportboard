@@ -13,7 +13,7 @@ $raw = file_get_contents('php://input');
 require_once('../../include/functions.php');
 
 
-function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
+function sb_sms_get_historical_data($to, $from, $messaging_service_sid, $latest_message) {
 
     $settings = sb_get_setting('sms-twilio');
     $to = trim($to);
@@ -40,7 +40,8 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
         }
         return $object;
     }, $response["messages"]);
-
+    
+    $urlTo = $url;    
 
     // API call to fetch data sent from User to Agent
     $header = ['Authorization: Basic ' . base64_encode($settings['sms-twilio-user'] . ':' . $settings['sms-twilio-token']),
@@ -67,11 +68,27 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
         return $object;
     }, $response["messages"]);
 
+    $urlFrom = $url;
+
     $response = array_merge($responseTo, $responseFrom);
     usort($response, function($a, $b) {
         return strtotime($a->date_sent) - strtotime($b->date_sent);
-    }); 
-    array_pop($response);
+    });
+
+    // slack post
+    $header = ['Content-Type: application/json'];
+    $url = 'https://hooks.slack.com/services/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';
+    $output = array_map(function ($object) { return $object->body; }, $response);
+    $msg = implode(', ', $output);
+    $query = json_encode(['text' => "urlTo: " . $urlTo . "\n urlFrom: " . $urlFrom . "\n response: " . $msg . "\n -----------------"]);
+    sb_curl($url, $query, $header);
+
+    if (count($response) > 0) {
+        if (isset($response[count($response) - 1]) && $response[count($response) - 1]->body === $latest_message) {
+            array_pop($response);
+        }
+    }
+    
     return $response;
 }
 
@@ -126,7 +143,7 @@ if ($raw) {
             $to = $phone;
             $from = $agent_phone;
             $messaging_service_sid = $settings['sms-twilio-sender'];
-            $history_data = sb_sms_get_historical_data($to, $from, $messaging_service_sid);
+            $history_data = sb_sms_get_historical_data($to, $from, $messaging_service_sid, $message);
             insert_history_data_to_message($history_data, $conversation_id);
         }
 
