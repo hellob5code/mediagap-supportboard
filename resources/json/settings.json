@@ -77,6 +77,28 @@
       "id": "stop-conversations",
       "title": "Stop conversations",
       "content": "Hide conversations from the admin area which has last message as 'STOP' or 'stop'."
+    },
+    {
+      "type": "repeater",
+      "id": "opt-out-setting",
+      "title": "Opt Out Keywords",
+      "content": "Add and manage additional support departments.",
+      "items": [
+        {
+          "type": "select",
+          "id": "opt-out-condition",
+          "name": "Condition",
+          "value": [
+            [ "strict", "Strict" ],
+            [ "contains", "Contains" ]
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Keyword",
+          "id": "opt-out-keyword"
+        }
+      ]
     }
   ],
   "messages": [

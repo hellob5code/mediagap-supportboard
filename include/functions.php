@@ -1488,9 +1488,6 @@ function sb_get_conversation($user_id = false, $conversation_id = false) {
                 }
                 if (!sb_get_setting('disable-notes')) $details['notes'] = sb_get_notes($conversation_id);
             }
-            if (trim(strtolower($messages[count($messages) - 1]['message'])) == "stop") {
-                return new SBError('db-error', 'sb_get_conversation', 'No records found');
-            }
             return ['messages' => $messages, 'details' => $details];
         }
     } else {
@@ -1502,6 +1499,8 @@ function sb_get_conversation($user_id = false, $conversation_id = false) {
 function sb_search_conversations($search, $routing) {
     $search = sb_db_escape(mb_strtolower($search));
     $department = sb_get_agent_department();
+    $user = sb_get_active_user();
+    $department = isset($user['user_type']) && $user['user_type'] == "admin" ? false : $department; 
     $result = sb_db_get('SELECT sb_messages.*, sb_users.user_type as message_user_type FROM sb_messages, sb_users' . ($department !== false || $routing ? ', sb_conversations' : '') . ' WHERE sb_users.id = sb_messages.user_id' . ($department !== false ? ' AND sb_conversations.id = sb_messages.conversation_id AND sb_conversations.department = ' . $department : '') . sb_routing_db($routing) . ($routing && $department === false ? ' AND sb_conversations.id = sb_messages.conversation_id' : '') .' AND (LOWER(sb_messages.message) LIKE "%' . $search . '%" OR LOWER(sb_messages.attachments) LIKE "%' . $search . '%" OR LOWER(sb_users.first_name) LIKE "%' . $search . '%" OR LOWER(sb_users.last_name) LIKE "%' . $search . '%" OR LOWER(sb_users.email) LIKE "%' . $search . '%") GROUP BY sb_messages.conversation_id ORDER BY sb_messages.creation_time DESC', false);
     if (isset($result) && is_array($result)) {
         return sb_get_conversations_users($result);
@@ -2762,6 +2761,14 @@ function sb_get_setting_code($array) {
                             break;
                         case 'upload-image':
                             $content .= '<div data-type="upload-image"><div data-id="' . $item['id'] . '" class="image"><i class="sb-icon-close"></i></div></div>';
+                            break;
+                        case 'select':
+                            $content .= '<select data-id="' . $item['id'] . '">';
+                            $items = $item['value'];
+                            for ($j = 0; $j < count($items); $j++) {
+                                $content .= '<option value="' . $items[$j][0] . '">' . sb_s($items[$j][1]) . '</option>';
+                            }
+                            $content .= '</select>';
                             break;
                     }
                     $content .= '</div>';
