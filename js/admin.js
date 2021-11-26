@@ -2645,6 +2645,8 @@
                         let item_not_pending;
                         let scroll_to_conversation = false;
                         let id_check = [];
+                        let select = conversations_admin_list.find('.sb-select');
+                        let select_status_code = select.find('.sb-active').attr('data-value');            
                         this.datetime_last_conversation = response[0]['creation_time'];
 
                         for (var i = 0; i < response.length; i++) {
@@ -2662,18 +2664,21 @@
 
                                 // Active conversation
                                 if (active_conversation) {
+                                    
                                     conversation_code = conversation_code.replace('<li', '<li class="sb-active"');
                                     if (conversation) {
                                         if (item['message']) {
                                             conversation_li.replaceWith(conversation_code);
                                         }
                                         conversations[conversation_index]['conversation_status_code'] = status;
-                                        conversations_area.find('.sb-top [data-value="read"]').sbActivate(status == 2);
+                                        conversations_area.find('.sb-top [data-value="read"]').sbActivate(status == 2 || status == 6);
+                                        if (select_status_code == 0 && status == 6) {
+                                            conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
+                                        }
                                     } else {
                                         scroll_to_conversation = true;
                                     }
                                 } else if (conversation) {
-
                                     // Conversation already in list but not active
                                     conversations[conversation_index] = item;
                                     conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
@@ -2686,7 +2691,7 @@
 
                                 // New conversation 
                                 if (!active_conversation || !conversation) {
-                                    if (status == 2) {
+                                    if ((status == 2 && select_status_code == 0) || (status == 6 && select_status_code == 6)) {
                                         code_pending += conversation_code;
                                         conversations.unshift(item);
                                     } else if (status == 0 || status == 1) {
@@ -2715,7 +2720,7 @@
                                 }
 
                                 // Desktop, flash, sounds notifications
-                                if (!SBChat.tab_active && item['conversation_status_code'] == 2 && (!SBF.isAgent(item['message_user_type']) || 'preview' in payload) && !(SBF.null(item.message) && SBF.null(item.attachments))) {
+                                if (!SBChat.tab_active && (item['conversation_status_code'] == 2 || item['conversation_status_code'] == 6) && (!SBF.isAgent(item['message_user_type']) || 'preview' in payload) && !(SBF.null(item.message) && SBF.null(item.attachments))) {
                                     if (this.desktop_notifications) {
                                         let user_details = [item['first_name'] + ' ' + item['last_name'], (item['profile_image'].indexOf('user.svg') > 0 ? SB_ADMIN_SETTINGS['notifications-icon'] : item['profile_image'])];
                                         SBChat.desktopNotification(user_details[0], 'preview' in payload ? payload.preview : item.message, user_details[1], conversation_id, user_id);

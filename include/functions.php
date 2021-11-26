@@ -1437,7 +1437,7 @@ function sb_remove_stop_conversations($conversations) {
 }
 
 function sb_get_conversations($pagination = 0, $status_code = 0, $routing = false, $routing_unassigned = false) {
-    $status_code = $status_code == 0 ? 'AND sb_conversations.status_code <> 3 AND sb_conversations.status_code <> 4' : 'AND sb_conversations.status_code = ' . sb_db_escape($status_code);
+    $status_code = $status_code == 0 ? 'AND sb_conversations.status_code <> 3 AND sb_conversations.status_code <> 4 AND sb_conversations.status_code <> 6' : 'AND sb_conversations.status_code = ' . sb_db_escape($status_code);
     $result = sb_db_get('SELECT sb_messages.*, sb_users.user_type as message_user_type FROM sb_messages, sb_users, sb_conversations WHERE sb_users.id = sb_messages.user_id ' . $status_code . ' AND sb_conversations.id = sb_messages.conversation_id' . (sb_get_agent_department() !== false ? ' AND sb_conversations.department = ' . sb_get_agent_department() : '') . sb_routing_db($routing, $routing_unassigned) . ' AND sb_messages.id IN (SELECT max(id) FROM sb_messages WHERE message <> "" OR attachments <> "" GROUP BY conversation_id) GROUP BY conversation_id ORDER BY sb_conversations.status_code DESC, sb_messages.id DESC LIMIT ' . (intval(sb_db_escape($pagination)) * 100) . ',100', false);
     if (isset($result) && is_array($result)) {
         return sb_get_conversations_users($result);
@@ -1515,13 +1515,14 @@ function sb_search_user_conversations($search, $user_id = false) {
 }
 
 function sb_new_conversation($user_id, $status_code = 0, $title = '', $department = -1, $agent_id = -1, $source = false, $extra = false) {
-    if (!sb_isset_num($agent_id) && sb_get_setting('routing') && !sb_get_multi_setting('queue', 'queue-active')) {
+    if (!sb_isset_num($agent_id) && sb_get_setting('routing')) {
         $agent_id = sb_routing(-1, $department);
     } else if (sb_isset_num($agent_id)) {
         if (defined('SB_AECOMMERCE')) {
             $agent_id = sb_aecommerce_get_agent_id($agent_id);
         }
     }
+    $status_code = sb_isset_num($agent_id) ? 6 : $status_code;
     $user_id = sb_db_escape($user_id);
     $conversation_id = sb_db_query('INSERT INTO sb_conversations(user_id, title, status_code, creation_time, department, agent_id, source, extra) VALUES (' . $user_id . ', "' . sb_db_escape(ucfirst($title)) . '", "' . ($status_code == -1 || $status_code === false || $status_code === '' ? 2 : sb_db_escape($status_code)) . '", "' . gmdate('Y-m-d H:i:s') . '", ' . (sb_isset_num($department) ? sb_db_escape($department) : 'NULL') . ', ' . (sb_isset_num($agent_id) ? sb_db_escape($agent_id) : 'NULL') . ', ' . ($source ? '"' . sb_db_escape($source) . '"' : 'NULL') . ', ' . ($extra ? '"' . sb_db_escape($extra) . '"' : 'NULL') . ')', true);
     if (is_numeric($conversation_id)) {
@@ -1563,8 +1564,28 @@ function sb_update_conversation_status($conversation_id, $status) {
             $response = new SBValidationError('invalid-status-code');
         }
     }
-    if (in_array($status, [3, 4]) && sb_is_agent()) sb_update_conversation_event('conversation-status-update-' . $status, $conversation_id);
+    if (in_array($status, [3, 4]) && sb_is_agent()) {
+        sb_update_conversation_event('conversation-status-update-' . $status, $conversation_id);
+        /* 
+         * If conversation is archived(3) or deleted(4) get a latest unassigned conversation from inbox and assigned it to the agent
+         * 
+        */
+        // $department = sb_isset(sb_db_get('SELECT department FROM sb_conversations WHERE id = ' . $conversation_id), 'department');
+        // if (sb_isset_num($department)) sb_assign_latest_unassigned_conversation_to_agent($department);
+    }
     return $response;
+}
+
+function sb_assign_latest_unassigned_conversation_to_agent($department) {
+    $conversation_id = sb_isset(sb_db_get('SELECT id FROM sb_conversations WHERE status_code in (0, 1, 2) AND agent_id is NULL AND source = "sm" ORDER BY id DESC LIMIT 1'), 'id');
+    $agent_id = sb_routing(-1, $department);
+    // print_r("agent_id: " . $agent_id);
+    // print_r("conv_id: " . $conversation_id);
+    $status = sb_isset_num($agent_id) ? 6 : null;
+    if (sb_isset_num($conversation_id) && sb_isset_num($agent_id)) {
+        print_r("Inside update");
+        sb_db_query('UPDATE sb_conversations SET agent_id = ' . $agent_id . ', status_code = ' . sb_db_escape($status) . ' WHERE id = '. $conversation_id);
+    }
 }
 
 function sb_update_conversation_department($conversation_id, $department, $message = false) {
@@ -1585,12 +1606,14 @@ function sb_update_conversation_department($conversation_id, $department, $messa
 function sb_update_conversation_agent($conversation_id, $agent_id, $message = false) {
     if (sb_conversation_security_error($conversation_id)) return new SBError('security-error', 'sb_update_conversation_agent');
     $conversation_id = sb_db_escape($conversation_id);
-    if ($agent_id == 'routing' || $agent_id == 'routing-unassigned') $agent_id = sb_routing(false, sb_isset(sb_db_get('SELECT department FROM sb_conversations WHERE id = ' . $conversation_id), 'department'), $agent_id == 'routing-unassigned');
+    $result = sb_db_get('SELECT status_code, department FROM sb_conversations WHERE id = ' . $conversation_id);
+    if ($agent_id == 'routing' || $agent_id == 'routing-unassigned') $agent_id = sb_routing(false, isset($result['department']), $agent_id == 'routing-unassigned');
     $empty_agent_id = empty($agent_id);
     if (!$empty_agent_id && !in_array(sb_isset(sb_db_get('SELECT user_type FROM sb_users WHERE id = ' . sb_db_escape($agent_id)), 'user_type'), ['agent', 'admin'])) {
         return new SBError('not-an-agent', 'sb_update_conversation_agent');
     }
-    $response = sb_db_query('UPDATE sb_conversations SET agent_id = ' . ($empty_agent_id ? 'NULL' : sb_db_escape($agent_id)) . ' WHERE id = '. $conversation_id);
+    $status_code = !$empty_agent_id && in_array($result['status_code'], [0, 1, 2]) ? 6 : null;
+    $response = sb_db_query('UPDATE sb_conversations SET ' . ($status_code == 6 ? ' status_code = ' . $status_code . ',' : '') . ' agent_id = ' . ($empty_agent_id ? 'NULL' : sb_db_escape($agent_id)) . ' WHERE id = '. $conversation_id);
     if ($response) {
         if ($message) {
             sb_send_agents_notifications($agent_id, $message, $empty_agent_id ? '' : str_replace('{T}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {T} assigned this conversation to you.')), $conversation_id, false, false, false, ['force' => true]);
@@ -1873,6 +1896,11 @@ function sb_routing_assign_conversation($agent_id, $conversation_id) {
 }
 
 function sb_routing($conversation_id = false, $department = false, $unassigned = false) {
+    /* 
+     * get concurrent chats count from settings
+     */
+    $concurrent_chats = sb_get_multi_setting('queue', 'queue-concurrent-chats');
+    $concurrent_chats = $concurrent_chats == false || $concurrent_chats == '' ? 5 : intval($concurrent_chats);        
     $count_last = 0;
     $index = 0;
     $online_agents = sb_get_online_user_ids(true);
@@ -1886,13 +1914,21 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
     }
     if ($count) {
         for ($i = 0; $i < $count; $i++) {
-            $count_now = intval(sb_db_get('SELECT COUNT(*) AS `count` FROM sb_conversations WHERE (status_code = 0 OR status_code = 1 OR status_code = 2) AND agent_id = ' . $agents[$i]['id'])['count']);
-            if ($count_last > $count_now) {
+            $count_now = intval(sb_db_get('SELECT COUNT(*) AS `count` FROM sb_conversations WHERE (status_code = 0 OR status_code = 1 OR status_code = 2 OR status_code = 6) AND agent_id = ' . $agents[$i]['id'])['count']);
+            /* 
+             * Add a new condition here to check how many concurrent conversation agent can handle
+             * like $count_last > $count_now && $count_now < $concurrent_chats 
+             */
+            if ($count_last > $count_now && $count_now < $concurrent_chats) {
                 $index = $i;
                 break;
             }
             $count_last = $count_now;
+            if ($index == 0 && $count_now >= $concurrent_chats) {
+                $index = -1;
+            }
         }
+        if ($index == -1) return $conversation_id ? sb_routing_assign_conversation(null, $conversation_id) : null;
         return $conversation_id == -1 || !$conversation_id ? $agents[$index]['id'] : sb_routing_assign_conversation($agents[$index]['id'], $conversation_id);
     }
     return false;
@@ -1979,7 +2015,7 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
 
             // Conversation status code
             if ($conversation_status_code != 'skip') {
-                if ($conversation_status_code == -1 || $conversation_status_code === false || !in_array($conversation_status_code, [0, 1, 2, 3, 4])) {
+                if ($conversation_status_code == -1 || $conversation_status_code === false || !in_array($conversation_status_code, [0, 1, 2, 3, 4, 6])) {
                     $conversation_status_code = $is_sender_agent && !$is_sender_bot ? 1 : ($is_human_takeover ? 1 : 2);
                 }
                 if ($conversation_status_code != $conversation['status_code']) sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
