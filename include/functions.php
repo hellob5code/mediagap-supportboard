@@ -1612,8 +1612,17 @@ function sb_update_conversation_agent($conversation_id, $agent_id, $message = fa
     if (!$empty_agent_id && !in_array(sb_isset(sb_db_get('SELECT user_type FROM sb_users WHERE id = ' . sb_db_escape($agent_id)), 'user_type'), ['agent', 'admin'])) {
         return new SBError('not-an-agent', 'sb_update_conversation_agent');
     }
-    $status_code = !$empty_agent_id && in_array($result['status_code'], [0, 1, 2]) ? 6 : null;
-    $response = sb_db_query('UPDATE sb_conversations SET ' . ($status_code == 6 ? ' status_code = ' . $status_code . ',' : '') . ' agent_id = ' . ($empty_agent_id ? 'NULL' : sb_db_escape($agent_id)) . ' WHERE id = '. $conversation_id);
+    $status_code = null;
+    if (!$empty_agent_id) {
+        if (in_array($result['status_code'], [0, 1, 2])) {
+            $status_code = 6;        
+        }
+    } else {
+        if (in_array($result['status_code'], [6])) {
+            $status_code = 2;
+        }
+    }
+    $response = sb_db_query('UPDATE sb_conversations SET ' . ($status_code ? ' status_code = ' . $status_code . ',' : '') . ' agent_id = ' . ($empty_agent_id ? 'NULL' : sb_db_escape($agent_id)) . ' WHERE id = '. $conversation_id);
     if ($response) {
         if ($message) {
             sb_send_agents_notifications($agent_id, $message, $empty_agent_id ? '' : str_replace('{T}', sb_is_agent() ? sb_get_user_name() : sb_get_setting('bot-name', 'Dialogflow'), sb_('This message has been sent because {T} assigned this conversation to you.')), $conversation_id, false, false, false, ['force' => true]);
@@ -1905,6 +1914,10 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
     $index = 0;
     $online_agents = sb_get_online_user_ids(true);
     $department = sb_db_escape($department);
+    /*
+    * get agents sorted by last activity in user table
+    * by this we are fetching agents which are ideal most 
+    */
     $agents = count($online_agents) ? sb_db_get('SELECT id FROM sb_users WHERE user_type = "agent" AND id IN (' . implode(',', $online_agents) . ')' . (sb_isset_num($department) ? ' AND department = ' . $department : ''), false) : [];
     $count = count($agents);
     if ($count == 0) {
@@ -1913,22 +1926,29 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
         $count = count($agents);
     }
     if ($count) {
+        $count_now = array();
         for ($i = 0; $i < $count; $i++) {
-            $count_now = intval(sb_db_get('SELECT COUNT(*) AS `count` FROM sb_conversations WHERE (status_code = 0 OR status_code = 1 OR status_code = 2 OR status_code = 6) AND agent_id = ' . $agents[$i]['id'])['count']);
+            $count_now[$i] = intval(sb_db_get('SELECT COUNT(*) AS `count` FROM sb_conversations WHERE (status_code = 0 OR status_code = 1 OR status_code = 2 OR status_code = 6) AND agent_id = ' . $agents[$i]['id'])['count']);
             /* 
              * Add a new condition here to check how many concurrent conversation agent can handle
              * like $count_last > $count_now && $count_now < $concurrent_chats 
              */
-            if ($count_last > $count_now && $count_now < $concurrent_chats) {
+            if ($count_last > $count_now[$i] && $count_now[$i] < $concurrent_chats) {
                 $index = $i;
                 break;
             }
-            $count_last = $count_now;
-            if ($index == 0 && $count_now >= $concurrent_chats) {
-                $index = -1;
-            }
+            $count_last = $count_now[$i];
+            // if ($index == 0 && $count_now >= $concurrent_chats) {
+            //     $index = -1;
+            // }
         }
-        if ($index == -1) return $conversation_id ? sb_routing_assign_conversation(null, $conversation_id) : null;
+        // if ($index == -1) return $conversation_id ? sb_routing_assign_conversation(null, $conversation_id) : null;
+        if ($index == 0 && $count_now[0] >= $concurrent_chats) {
+            return null;
+        }
+        /*
+        * check for agent is he is the same agent then get new agent by $agents[$index+1]['id']
+        */
         return $conversation_id == -1 || !$conversation_id ? $agents[$index]['id'] : sb_routing_assign_conversation($agents[$index]['id'], $conversation_id);
     }
     return false;

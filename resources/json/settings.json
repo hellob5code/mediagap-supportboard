@@ -79,24 +79,20 @@
       "content": "Hide conversations from the admin area which has last message as 'STOP' or 'stop'."
     },
     {
-      "type": "repeater",
-      "id": "opt-out-setting",
-      "title": "Opt Out Keywords",
-      "content": "Add and manage additional support departments.",
-      "items": [
+      "type": "multi-input",
+      "id": "dynamic-handoff",
+      "title": "Dynamic Handoff",
+      "content": "Assign unassigned conversation to agent dynamically. Wait for X minutes -> Assign to agent ( if not reply for X minutes ) -> Assign to another agent  [ Upto a count of X agents ].",
+      "value": [
         {
-          "type": "select",
-          "id": "opt-out-condition",
-          "name": "Condition",
-          "value": [
-            [ "strict", "Strict" ],
-            [ "contains", "Contains" ]
-          ]
+          "type": "number",
+          "id": "dynamic-handoff-time",
+          "title": "Waiting Time (minute)"
         },
         {
-          "type": "text",
-          "name": "Keyword",
-          "id": "opt-out-keyword"
+          "type": "number",
+          "id": "dynamic-handoff-count",
+          "title": "Assign Upto"
         }
       ]
     }
