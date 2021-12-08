@@ -151,6 +151,10 @@
             timeout = setTimeout(() => { card.sbActivate(false) }, 5000);
         } else if (!SBF.null(type) && type == 'error') {
             card.addClass('sb-info-card-error');
+        } else if (!SBF.null(type) && type == 'assign') {
+            card.removeClass('sb-info-card-error sb-info-card-warning sb-info-card-info');
+            clearTimeout(timeout);
+            timeout = setTimeout(() => { card.sbActivate(false) }, 50000);
         } else {
             card.addClass('sb-info-card-info');
         }
@@ -2684,6 +2688,14 @@
                                     conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
                                 }
 
+                                if ('event' in payload && payload['event'].includes("conversation-agent-update-")) {
+                                    let agent_id = payload['event'];
+                                    agent_id = agent_id.replace("conversation-agent-update-", "");
+                                    if (agent_id == SB_ACTIVE_AGENT['id']) {
+                                        showResponse("New conversation assigned to you. " + "<a href='/admin.php?conversation=" + conversation_id + "'>Click  here</a>", "assign");
+                                    }
+                                }
+
                                 // Add the user to the global users array if it doesn't exists
                                 if (!(user_id in users)) {
                                     users[user_id] = new SBUser({ 'id': user_id, 'first_name': item['first_name'], 'last_name': item['last_name'], 'profile_image': item['profile_image'], 'user_type': item['user_type'] });
@@ -2769,7 +2781,10 @@
 
         // Update the top left filter
         updateMenu: function () {
+            let select = conversations_admin_list.find('.sb-select');
+            let select_status_code = select.find('.sb-active').attr('data-value');            
             let count = conversations_admin_list_ul.find('[data-conversation-status="2"]').length;
+            count = select_status_code == 6 ? conversations_admin_list_ul.find('[data-conversation-status="6"]').length : count;
             let item = conversations_admin_list.find('.sb-select');
             let span = item.find(' > p span');
             if (count == 100 || this.menu_count_ajax) {
