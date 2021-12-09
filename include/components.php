@@ -692,6 +692,10 @@ function sb_component_admin() {
                                         <?php sb_e('Inbox') ?>
                                         <span></span>
                                     </li>
+                                    <li data-value="6">
+                                        <?php sb_e('Agent Inbox') ?>
+                                        <span></span>
+                                    </li>
                                     <li data-value="3">
                                         <?php sb_e('Archive') ?>
                                     </li>

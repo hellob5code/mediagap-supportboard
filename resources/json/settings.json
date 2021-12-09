@@ -77,6 +77,24 @@
       "id": "stop-conversations",
       "title": "Stop conversations",
       "content": "Hide conversations from the admin area which has last message as 'STOP' or 'stop'."
+    },
+    {
+      "type": "multi-input",
+      "id": "dynamic-handoff",
+      "title": "Dynamic Handoff",
+      "content": "Assign unassigned conversation to agent dynamically. Wait for X minutes -> Assign to agent ( if not reply for X minutes ) -> Assign to another agent  [ Upto a count of X agents ].",
+      "value": [
+        {
+          "type": "number",
+          "id": "dynamic-handoff-time",
+          "title": "Waiting Time (minute)"
+        },
+        {
+          "type": "number",
+          "id": "dynamic-handoff-count",
+          "title": "Assign Upto"
+        }
+      ]
     }
   ],
   "messages": [

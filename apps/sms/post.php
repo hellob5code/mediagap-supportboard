@@ -13,7 +13,7 @@ $raw = file_get_contents('php://input');
 require_once('../../include/functions.php');
 
 
-function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
+function sb_sms_get_historical_data($to, $from, $messaging_service_sid, $latest_message) {
 
     $settings = sb_get_setting('sms-twilio');
     $to = trim($to);
@@ -40,8 +40,7 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
         }
         return $object;
     }, $response["messages"]);
-
-
+    
     // API call to fetch data sent from User to Agent
     $header = ['Authorization: Basic ' . base64_encode($settings['sms-twilio-user'] . ':' . $settings['sms-twilio-token']),
         'Content-Type: application/json'
@@ -70,8 +69,14 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid) {
     $response = array_merge($responseTo, $responseFrom);
     usort($response, function($a, $b) {
         return strtotime($a->date_sent) - strtotime($b->date_sent);
-    }); 
-    array_pop($response);
+    });
+
+    if (count($response) > 0) {
+        if (isset($response[count($response) - 1]) && $response[count($response) - 1]->body === $latest_message) {
+            array_pop($response);
+        }
+    }
+    
     return $response;
 }
 
@@ -126,7 +131,7 @@ if ($raw) {
             $to = $phone;
             $from = $agent_phone;
             $messaging_service_sid = $settings['sms-twilio-sender'];
-            $history_data = sb_sms_get_historical_data($to, $from, $messaging_service_sid);
+            $history_data = sb_sms_get_historical_data($to, $from, $messaging_service_sid, $message);
             insert_history_data_to_message($history_data, $conversation_id);
         }
 
@@ -175,7 +180,10 @@ if ($raw) {
         }
 
         // Send message
-        $response = sb_send_message($user_id, $conversation_id, $message, $attachments, 2);
+        $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE source = "sm" AND id = ' . $conversation_id . ' LIMIT 1'), 'agent_id');
+        // if agent is assigned to conversation so on new message we keep the conversation on Agent Inbox
+        $conversation_ststus_code = sb_isset_num($agent_id) ? 6 : 2; 
+        $response = sb_send_message($user_id, $conversation_id, $message, $attachments, $conversation_ststus_code);
 
         // Dialogflow, Notifications, Bot messages
         $response_extarnal = sb_messaging_platforms_functions($conversation_id, $message, $attachments, $user, ['source' => 'sm', 'phone' => $phone]);

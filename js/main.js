@@ -1702,6 +1702,9 @@
             if (!admin && is_user && !is_dialogflow_human_takeover) {
                 conversation_status_code = 2;
             }
+            if (user_id && admin) {
+                conversation_status_code = 6;
+            }
 
             // Send message
             if (message || attachments.length || payload) {
