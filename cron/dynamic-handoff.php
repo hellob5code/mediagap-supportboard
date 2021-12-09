@@ -37,7 +37,7 @@ function sb_init() {
                     'message' => $message,
                     'user_id' => $value['user_id'],
                     'language' => false,
-                    'login-cookie' => 'QksxK2d3aUY3UkVVcGhQcUo4RlhYeWJjZXZ0enBnSk1SWms3RE0ycllodFcvcVRtbFVhekU1dmljcHhVajdjWm5Vc1d3NnhvWk14ZGNPakZOcGJqb0tUSlY1Y2NqUmdIdVV2RXZQSHMxV0NiNmN2c2lUbkNkTGM4bXRQMHJxMXA4THdFdzdQUWtWcExkcHlxZFVOQSszRzVYaUpDckRSVmdYNDFZVUJmelJMdG1CQnR4TFlmaEpOTzluc0pvaWxTK1ZqOC9RcnBzRmRlODdhY002N3VtSnlFYThIRzBmdjczdGdURmI0c3ZselgzNjJlL0VVUStXY2xmdnFvMGdqanAxeXhmSXgrUEorL2hLZjlNQ1hiK2FaVWJwc3pueEZYbGpCbHJiQVJWRkI1NURYV2ZJSVpZNzcvem13eGRFWlp1Q0h6OHcyTzNFMDNCMDhSamoxazBKQ1UrQ2o1cGhmb0Z5bDdvRFNhR2JXbHBXN1E3V2k4U3lNOTZCQzRRdGNLU250Si8ra2J2dDFpUEp5YTFLV21INXc2UTN2MlJQZk4wTGxNZFhQMGJIdCtpWnNaSVNhVTFrb3JNRmplMUUwMU5TU3ZrTXAxdU10clVIUllOblU4NEE9PQ'
+                    'login-cookie' => 'OVNsY0wxeVAyRWVNWEtjbmQvNjdBcFpBcmNSN29RMVVGRTIzSGdBUmVCS1hkT2ZyWkVoZVNIdlNVRkZ1OWdzdjM4ais5cE9RSzZNTk8vUEZpOXI4amRiRERjYlJnbGlYeUd0dGxGV2pLdy9JNUIyT1AzMVZ5b2oyazEvSUdDaXBiTER3UmJudXVHR04wS0I5V2kzWUo3MUdUY0JlNWoyUmp1enNQbVZDeWdFTkhmYXdBSFpERXFCc0VVeDV6RW9iaVFLKzBuUVNuT04zSGhpWldGODFRdEY2ckhOWFZwVkFGYnY3UW1NWkEzNlI2eFVaaVNGUUhBdlNqcFNvdVFVTWR2QmJCUGhmY1B2UkU2Ny9hNVJwQ3ZMdTBlL25zWnpNcWplVXE3YnZ0WEx4QUxaOHd3WExSRnowV0FGaC93NnJBTTFHaGtGY056S3hHRGh5MVhkNnNIVERKeituMTVJVnVHRENoWmpPU05KN1YrT3JHaFZlUGVUbm9kN2NHOTZVTUhnSjBEUWZoeVBCQm9wTXozOERVVzdtQW9zU3lENkRhYkhGOXk4ZWRJTDNOR3AwNkNkS2h4VDdNM1U0SnNteVh3SzRFNjdTQkRGdkJVWXRFYVllSWNwTjhiZGppQ3pkNlZaWGVCM1FKWEU9'
                 ];
                 $url = SB_URL . '/include/ajax.php';
                 $response = sb_curl($url, $query, $header);
@@ -55,8 +55,7 @@ function sb_init() {
 }
 
 function sb_get_unassigned_conversations($minute, $count, $department) {
-    $conversations = sb_db_get('SELECT sb_conversations.id, sb_conversations.user_id, sb_conversations.agent_id, sb_conversations.dynamic_handoff_count FROM sb_conversations inner join sb_messages ON sb_conversations.id = sb_messages.conversation_id WHERE sb_conversations.status_code IN(0, 1, 2, 6) AND sb_conversations.source = "sm" AND sb_conversations.dynamic_handoff_count <= ' . $count . ' AND sb_conversations.department = ' . $department . ' AND sb_messages.id IN ( SELECT max(sb_messages.id) FROM sb_messages WHERE sb_messages.creation_time < (utc_timestamp() - INTERVAL '. $minute .' MINUTE) group by sb_messages.conversation_id) ORDER BY sb_conversations.id DESC', false);
-    // print_r($conversations);
+    $conversations = sb_db_get('SELECT sb_conversations.id, sb_conversations.user_id, sb_conversations.agent_id, sb_conversations.dynamic_handoff_count FROM sb_conversations inner join sb_messages ON sb_conversations.id = sb_messages.conversation_id WHERE sb_conversations.status_code IN(0, 1, 2, 6) AND sb_conversations.source = "sm" AND sb_conversations.dynamic_handoff_count < ' . $count . ' AND sb_conversations.department = ' . $department . ' AND sb_messages.id IN ( SELECT max(sb_messages.id) FROM sb_messages WHERE sb_messages.creation_time < (utc_timestamp() - INTERVAL '. $minute .' MINUTE) group by sb_messages.conversation_id) ORDER BY sb_conversations.id DESC', false);
     return $conversations;
 }
 
