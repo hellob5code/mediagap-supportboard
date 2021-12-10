@@ -696,6 +696,10 @@ function sb_component_admin() {
                                         <?php sb_e('Agent Inbox') ?>
                                         <span></span>
                                     </li>
+                                    <li data-value="7">
+                                        <?php sb_e('Handled') ?>
+                                        <span></span>
+                                    </li>
                                     <li data-value="3">
                                         <?php sb_e('Archive') ?>
                                     </li>
@@ -720,7 +724,11 @@ function sb_component_admin() {
                             <div class="sb-labels"></div>
                             <div class="sb-menu-mobile">
                                 <i class="sb-icon-menu"></i>
-                                <ul>
+                                <ul><li>
+                                        <a data-value="handle" class="sb-btn-icon" data-sb-tooltip="<?php sb_e('Mark as handle') ?>">
+                                            <i class="sb-icon-like"></i>
+                                        </a>
+                                    </li>
                                     <li>
                                         <a data-value="archive" class="sb-btn-icon" data-sb-tooltip="<?php sb_e('Archive conversation') ?>">
                                             <i class="sb-icon-check"></i>
