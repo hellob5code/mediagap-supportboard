@@ -698,7 +698,6 @@ function sb_component_admin() {
                                     </li>
                                     <li data-value="7">
                                         <?php sb_e('Handled') ?>
-                                        <span></span>
                                     </li>
                                     <li data-value="3">
                                         <?php sb_e('Archive') ?>

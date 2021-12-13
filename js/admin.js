@@ -2703,9 +2703,7 @@
 
                                 // New conversation 
                                 if (!active_conversation || !conversation) {
-                                    if ((status == 2 && select_status_code == 0) || (status == 6 && select_status_code == 6)
-                                    || (status == 7 && select_status_code == 7)
-                                    ) {
+                                    if ((status == 2 && select_status_code == 0) || (status == 6 && select_status_code == 6)) {
                                         code_pending += conversation_code;
                                         conversations.unshift(item);
                                     } else if (status == 0 || status == 1) {
