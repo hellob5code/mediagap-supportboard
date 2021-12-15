@@ -27,7 +27,7 @@ function sb_init() {
             
             if (sb_isset_num($agent_id) && sb_isset_num($value['id'])) {
                 $message = sb_isset(sb_db_get('select message from sb_messages where conversation_id = '. $value['id'] .' and message != "" ORDER BY id DESC LIMIT 1'), 'message');
-                // sb_update_conversation_agent($value['id'], $agent_id, $message);
+                $message = trim(preg_replace('/\s\s+/', ' ', $message));
             
                 $header = ['Content-Type: application/x-www-form-urlencoded'];
                 $query = [

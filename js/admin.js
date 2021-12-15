@@ -2676,7 +2676,7 @@
                                         }
                                         conversations[conversation_index]['conversation_status_code'] = status;
                                         conversations_area.find('.sb-top [data-value="read"]').sbActivate(status == 2 || status == 6);
-                                        if (select_status_code == 0 && status == 6) {
+                                        if (select_status_code == 0 && status == 6 || select_status_code == 6 && status == 2) {
                                             conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
                                         }
                                     } else {
@@ -2732,7 +2732,7 @@
                                 }
 
                                 // Desktop, flash, sounds notifications
-                                if (!SBChat.tab_active && (item['conversation_status_code'] == 2 || item['conversation_status_code'] == 6) && (!SBF.isAgent(item['message_user_type']) || 'preview' in payload) && !(SBF.null(item.message) && SBF.null(item.attachments))) {
+                                if (!SBChat.tab_active && (item['conversation_status_code'] == 2 || item['conversation_status_code'] == 6 || item['conversation_status_code'] == 7) && (!SBF.isAgent(item['message_user_type']) || 'preview' in payload) && !(SBF.null(item.message) && SBF.null(item.attachments))) {
                                     if (this.desktop_notifications) {
                                         let user_details = [item['first_name'] + ' ' + item['last_name'], (item['profile_image'].indexOf('user.svg') > 0 ? SB_ADMIN_SETTINGS['notifications-icon'] : item['profile_image'])];
                                         SBChat.desktopNotification(user_details[0], 'preview' in payload ? payload.preview : item.message, user_details[1], conversation_id, user_id);
@@ -2977,8 +2977,54 @@
                 agent_id: agent_id,
                 message: SBChat.conversation.getLastMessage().message
             }, (response) => {
-                if (onSuccess) onSuccess(response);
+                if (response) {
+                    let active_conversation_id = SBChat.conversation ? SBChat.conversation.id : -1;
+                    let conversation_id = response['conversation_id'];
+                    let status = response['status_code'];
+                    let active_conversation = active_conversation_id == conversation_id;
+                    let select = conversations_admin_list.find('.sb-select');
+                    let select_status_code = select.find('.sb-active').attr('data-value'); 
+
+                    if (active_conversation) {
+                                    
+                        if (select_status_code == 6 && status == 2) {
+                            conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
+                            SBConversations.clickFirst();
+                            SBConversations.updateMenu();
+                        }
+                    }
+                    if (onSuccess) onSuccess(true);
+                }
             });
+        },
+
+        updateConversationStatus: function (conversation_id, status_code, value) {
+            SBF.ajax({
+                function: 'update-conversation-status',
+                conversation_id: conversation_id,
+                status_code: status_code
+            }, () => {
+                if ([0, 3, 4, 7].includes(status_code)) {
+                    for (var i = 0; i < conversations.length; i++) {
+                        if (conversations[i]['conversation_id'] == conversation_id) {
+                            conversations[i]['conversation_status_code'] = status_code;
+                            break;
+                        }
+                    }
+                }
+                if (SB_ADMIN_SETTINGS['close-message'] && status_code == 3) {
+                    SBF.ajax({ function: 'close-message', conversation_id: conversation_id, bot_id: SB_ADMIN_SETTINGS['bot-id'] });
+                    if (SB_ADMIN_SETTINGS['close-message-transcript']) SBConversations.transcript(conversation_id, 'email');
+                }
+                if (value == 'read') {
+                    conversations_admin_list_ul.find('.sb-active').attr('data-conversation-status', 0);
+                    conversations_area.find('.sb-top [data-value="read"]').sbActivate(false);
+                } else {
+                    conversations_admin_list.find('.sb-select li.sb-active').click();
+                    conversations_admin_list.find('.sb-select ul').sbActivate(false);
+                }
+            });
+            if (SBChat.conversation && SBChat.conversation.id == conversation_id) SBChat.conversation.set('conversation_status_code', status_code);
         },
 
         // Update the UI to display the active department of the conversation
@@ -4067,36 +4113,19 @@
                     status_code = 0;
                     message += 'marked as read.';
                     break;
+                case 'handle':
+                    status_code = 7;
+                    message += 'marked as handle.';
+                    break;
             }
             if (status_code != -1) {
-                dialog(message, 'alert', function () {
-                    SBF.ajax({
-                        function: 'update-conversation-status',
-                        conversation_id: conversation_id,
-                        status_code: status_code
-                    }, () => {
-                        if ([0, 3, 4].includes(status_code)) {
-                            for (var i = 0; i < conversations.length; i++) {
-                                if (conversations[i]['conversation_id'] == conversation_id) {
-                                    conversations[i]['conversation_status_code'] = status_code;
-                                    break;
-                                }
-                            }
-                        }
-                        if (SB_ADMIN_SETTINGS['close-message'] && status_code == 3) {
-                            SBF.ajax({ function: 'close-message', conversation_id: conversation_id, bot_id: SB_ADMIN_SETTINGS['bot-id'] });
-                            if (SB_ADMIN_SETTINGS['close-message-transcript']) SBConversations.transcript(conversation_id, 'email');
-                        }
-                        if (value == 'read') {
-                            conversations_admin_list_ul.find('.sb-active').attr('data-conversation-status', 0);
-                            conversations_area.find('.sb-top [data-value="read"]').sbActivate(false);
-                        } else {
-                            conversations_admin_list.find('.sb-select li.sb-active').click();
-                            conversations_admin_list.find('.sb-select ul').sbActivate(false);
-                        }
+                if (status_code == 7) {
+                    SBConversations.updateConversationStatus(conversation_id, status_code, value);
+                } else {
+                    dialog(message, 'alert', function () {
+                        SBConversations.updateConversationStatus(conversation_id, status_code, value);
                     });
-                    if (SBChat.conversation && SBChat.conversation.id == conversation_id) SBChat.conversation.set('conversation_status_code', status_code);
-                });
+                }
             }
         });
 
