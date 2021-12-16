@@ -95,6 +95,28 @@
           "title": "Assign Upto"
         }
       ]
+    },
+    {
+      "type": "repeater",
+      "id": "opt-out-setting",
+      "title": "Opt Out Keywords",
+      "content": "Move the conversation to Opt-Out list which has this defined keywords.",
+      "items": [
+        {
+          "type": "select",
+          "id": "opt-out-condition",
+          "name": "Condition",
+          "value": [
+            [ "strict", "Strict" ],
+            [ "contains", "Contains" ]
+          ]
+        },
+        {
+          "type": "text",
+          "name": "Keyword",
+          "id": "opt-out-keyword"
+        }
+      ]
     }
   ],
   "messages": [

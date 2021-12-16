@@ -88,6 +88,43 @@ function insert_history_data_to_message($history_data, $conversation_id) {
 }
 
 
+function check_for_opt_out($conversation_id, $user_id, $message) {
+    /* 
+        from user id check whether user has sent less than two messages
+        check user messages contains the word which is define in the opt out settings
+        convert the user message in lowercase and opt out setting keyword to lowercase before comparing
+        check whether to compare strict case or contains case
+        if the condition is true move conversation opt out list by assigning conversation status 8 
+        check for future message can not move list to inbox once it is in opt out
+        so for this check whehter conv is already has status code 8
+     */
+
+    $conversation_status_code = sb_isset(sb_db_get('SELECT status_code FROM sb_conversations WHERE id = ' . $conversation_id), 'status_code');
+    if ($conversation_status_code == 8)
+        return true;
+    $message_count = intval(sb_db_get('SELECT COUNT(*) AS `count` FROM sb_messages WHERE user_id = ' . $user_id)['count']);
+    if ($message_count < 2) {
+        $opt_out_setting = sb_get_setting('opt-out-setting'); 
+        if(is_array($opt_out_setting)) { 
+            foreach ($opt_out_setting as $value) {
+                if ($value['opt-out-condition'] == "strict") {
+                    // strict code
+                    if (strtolower($message) == strtolower($value['opt-out-keyword'])) {
+                        return true;    
+                    }
+                }
+                if ($value['opt-out-condition'] == "contains") {
+                    // contains code
+                    if (strpos(strtolower($message), strtolower($value['opt-out-keyword'])) !== false) {
+                        return true;
+                    }
+                }
+            } 
+        }
+    }
+    return false;
+}
+
 if ($raw) {
     $raw = explode('&', urldecode($raw));
     $response = [];
@@ -135,6 +172,8 @@ if ($raw) {
             insert_history_data_to_message($history_data, $conversation_id);
         }
 
+        // check for opt out message
+        $is_opt_out = check_for_opt_out($conversation_id, $user_id, $message);
         // Set active user
         $GLOBALS['SB_LOGIN'] = $user;
 
@@ -182,7 +221,15 @@ if ($raw) {
         // Send message
         $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE source = "sm" AND id = ' . $conversation_id . ' LIMIT 1'), 'agent_id');
         // if agent is assigned to conversation so on new message we keep the conversation on Agent Inbox
-        $conversation_ststus_code = sb_isset_num($agent_id) ? 6 : 2; 
+        if($is_opt_out) {
+            $conversation_ststus_code = 8;
+            // unassigned the conversation
+            sb_db_query('UPDATE sb_conversations SET agent_id = NULL WHERE id = ' . $conversation_id, true);
+        } else if (sb_isset_num($agent_id)) {
+            $conversation_ststus_code = 6;
+        } else {
+            $conversation_ststus_code = 2;
+        }
         $response = sb_send_message($user_id, $conversation_id, $message, $attachments, $conversation_ststus_code);
 
         // Dialogflow, Notifications, Bot messages

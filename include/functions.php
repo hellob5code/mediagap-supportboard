@@ -1437,7 +1437,7 @@ function sb_remove_stop_conversations($conversations) {
 }
 
 function sb_get_conversations($pagination = 0, $status_code = 0, $routing = false, $routing_unassigned = false) {
-    $status_code = $status_code == 0 ? 'AND sb_conversations.status_code <> 3 AND sb_conversations.status_code <> 4 AND sb_conversations.status_code <> 6 AND sb_conversations.status_code <> 7' : 'AND sb_conversations.status_code = ' . sb_db_escape($status_code);
+    $status_code = $status_code == 0 ? 'AND sb_conversations.status_code not in (3, 4, 6, 7, 8)' : 'AND sb_conversations.status_code = ' . sb_db_escape($status_code);
     $result = sb_db_get('SELECT sb_messages.*, sb_users.user_type as message_user_type FROM sb_messages, sb_users, sb_conversations WHERE sb_users.id = sb_messages.user_id ' . $status_code . ' AND sb_conversations.id = sb_messages.conversation_id' . (sb_get_agent_department() !== false ? ' AND sb_conversations.department = ' . sb_get_agent_department() : '') . sb_routing_db($routing, $routing_unassigned) . ' AND sb_messages.id IN (SELECT max(id) FROM sb_messages WHERE message <> "" OR attachments <> "" GROUP BY conversation_id) GROUP BY conversation_id ORDER BY sb_conversations.status_code DESC, sb_messages.id DESC LIMIT ' . (intval(sb_db_escape($pagination)) * 100) . ',100', false);
     if (isset($result) && is_array($result)) {
         return sb_get_conversations_users($result);
@@ -1556,7 +1556,7 @@ function sb_update_conversation_status($conversation_id, $status) {
         $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
         $status = $agent_id ? 6 : $status;
     }
-    if (in_array($status, [0, 1, 2, 3, 4, 6, 7])) {
+    if (in_array($status, [0, 1, 2, 3, 4, 6, 7, 8])) {
         $response = sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($status) . ' WHERE id = '. $conversation_id);
         if ($status == 3 || $status = 4) {
             sb_db_query('DELETE FROM sb_messages WHERE payload = "{\"human-takeover\":true}" AND conversation_id = '. $conversation_id);
@@ -2061,9 +2061,10 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
 
             // Conversation status code
             if ($conversation_status_code != 'skip') {
-                if ($conversation_status_code == -1 || $conversation_status_code === false || !in_array($conversation_status_code, [0, 1, 2, 3, 4, 6, 7])) {
+                if ($conversation_status_code == -1 || $conversation_status_code === false || !in_array($conversation_status_code, [0, 1, 2, 3, 4, 6, 7, 8])) {
                     $conversation_status_code = $is_sender_agent && !$is_sender_bot ? 1 : ($is_human_takeover ? 1 : 2);
                     $conversation_status_code = sb_isset_num($conversation['agent_id']) ? 6 : $conversation_status_code;
+                    $conversation_status_code = sb_isset_num($conversation['status_code']) == 8 ? $conversation['status_code'] : $conversation_status_code;
                 }
                 if ($conversation_status_code != $conversation['status_code']) sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
             }

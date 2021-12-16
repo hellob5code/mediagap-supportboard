@@ -2676,7 +2676,7 @@
                                         }
                                         conversations[conversation_index]['conversation_status_code'] = status;
                                         conversations_area.find('.sb-top [data-value="read"]').sbActivate(status == 2 || status == 6);
-                                        if (select_status_code == 0 && status == 6 || select_status_code == 6 && status == 2) {
+                                        if (select_status_code == 0 && status == 6 || select_status_code == 6 && status == 2 || select_status_code in [0, 6] && status == 8) {
                                             conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
                                         }
                                     } else {
@@ -2703,7 +2703,8 @@
 
                                 // New conversation 
                                 if (!active_conversation || !conversation) {
-                                    if ((status == 2 && select_status_code == 0) || (status == 6 && select_status_code == 6)) {
+                                    if ((status == 2 && select_status_code == 0) || (status == 6 && select_status_code == 6)
+                                    || (status == 8 && select_status_code == 8)) {
                                         code_pending += conversation_code;
                                         conversations.unshift(item);
                                     } else if (status == 0 || status == 1) {
@@ -4091,7 +4092,7 @@
             let conversation_id = SBChat.conversation.id;
             switch (value) {
                 case 'inbox':
-                    status_code = 0;
+                    status_code = 2;
                     message += 'restored.';
                     break;
                 case 'archive':
