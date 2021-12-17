@@ -1552,7 +1552,7 @@ function sb_get_last_conversation_id_or_create($user_id, $conversation_status_co
 function sb_update_conversation_status($conversation_id, $status) {
     $response = false;
     $conversation_id = sb_db_escape($conversation_id);
-    if ($status == 0) {
+    if (in_array($status, [0, 1, 2])) {
         $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
         $status = $agent_id ? 6 : $status;
     }
