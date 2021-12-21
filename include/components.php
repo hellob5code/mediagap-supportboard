@@ -699,6 +699,9 @@ function sb_component_admin() {
                                     <li data-value="7">
                                         <?php sb_e('Handled') ?>
                                     </li>
+                                    <li data-value="8">
+                                        <?php sb_e('Opt-Out') ?>
+                                    </li>
                                     <li data-value="3">
                                         <?php sb_e('Archive') ?>
                                     </li>
