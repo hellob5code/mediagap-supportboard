@@ -5,11 +5,11 @@
  * DIALOGFLOW APP
  * ==========================================================
  *
- * Dialogflow App main file. © 2021 board.support. All rights reserved.
+ * Dialogflow App main file. ï¿½ 2017-2021 board.support. All rights reserved.
  *
  */
 
-define('SB_DIALOGFLOW', '1.2.0');
+define('SB_DIALOGFLOW', '1.2.1');
 
 /*
  * -----------------------------------------------------------
@@ -144,6 +144,7 @@ class SBDialogflowIntent {
 
 $sb_recursion = true;
 function sb_dialogflow_message($conversation_id = false, $message = '', $token = -1, $language = false, $attachments = [], $event = '') {
+    // get agent id from conv id if not null then do not send the message
     $user_id = $conversation_id && sb_is_agent() ? sb_db_get('SELECT user_id FROM sb_conversations WHERE id = ' . sb_db_escape($conversation_id))['user_id'] : sb_get_active_user_ID();
     $query = ['queryInput' => [], 'queryParams' => ['payload' => ['support_board' => ['conversation_id' => $conversation_id, 'user_id' => $user_id]]]];
     $bot_id = sb_get_bot_id();
@@ -302,13 +303,24 @@ function sb_dialogflow_message($conversation_id = false, $message = '', $token =
                         $response_success['human_takeover'] = true;
                     } else {
                         $human_takeover_message = '[chips id="sb-human-takeover" options="' . sb_rich_value($human_takeover['dialogflow-human-takeover-confirm'], false) . ',' . sb_rich_value($human_takeover['dialogflow-human-takeover-cancel'], false) . '" message="' . sb_rich_value($human_takeover['dialogflow-human-takeover-message']) . '"]';
-                        $message_id = sb_send_message($bot_id, $conversation_id, $human_takeover_message)['id'];
-                        array_push($results, ['message' => $human_takeover_message, 'attachments' => [], 'payload' => false, 'id' => $message_id]);
+                        // prevent dialogflow to sent a message when conversation is assigned to the agent
+                        $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
+                        if (!$agent_id) {
+                            $message_id = sb_send_message($bot_id, $conversation_id, $human_takeover_message)['id'];
+                            array_push($results, ['message' => $human_takeover_message, 'attachments' => [], 'payload' => false, 'id' => $message_id]);
+                        }
                     }      
-                } else if (!$is_human_takeover || (!sb_is_user_online(sb_isset(sb_get_last_agent_in_conversation($conversation_id), 'id')) && !$unknow_answer)) {
+                } else if (!$is_human_takeover || (!sb_is_user_online(sb_isset(sb_get_last_agent_in_conversation($conversation_id), 'id')) && !$unknow_answer) || !empty($payload['force-message'])) {
+                    if (!$bot_message && isset($payload['force-message']) && $i > 0 && isset($messages[$i - 1]['text'])) {
+                        $bot_message = $messages[$i - 1]['text']['text'][0];
+                    }
                     $bot_message = sb_dialogflow_merge_fields($bot_message, $parameters, $language[0]);
-                    $message_id = sb_send_message($bot_id, $conversation_id, $bot_message, $attachments, -1, $response)['id'];
-                    array_push($results, ['message' => $bot_message, 'attachments' => $attachments, 'payload' => $payload, 'id' => $message_id]);
+                    // prevent dialogflow to sent a message when conversation is assigned to the agent 
+                    $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
+                    if (!$agent_id) {
+                        $message_id = sb_send_message($bot_id, $conversation_id, $bot_message, $attachments, -1, $response)['id'];
+                        array_push($results, ['message' => $bot_message, 'attachments' => $attachments, 'payload' => $payload, 'id' => $message_id]);   
+                    }
                 } 
             } else {
                 array_push($results, ['message' => sb_dialogflow_merge_fields($bot_message, $parameters, $language[0]), 'attachments' => $attachments, 'payload' => $payload]);
@@ -590,7 +602,7 @@ function sb_dialogflow_human_takeover($conversation_id, $auto_messages = false) 
     // Human takeover message and status code
     $message = sb_($human_takeover['dialogflow-human-takeover-message-confirmation']);
     if (!empty($message)) {
-        $message_id = sb_send_message($bot_id, $conversation_id, $message, [], 2, ['human-takeover-message-confirmation' => true, 'preview' => $last_message])['id'];
+        $message_id = sb_send_message($bot_id, $conversation_id, $message, [], 6, ['human-takeover-message-confirmation' => true, 'preview' => $last_message])['id'];
         array_push($response, ['message' => $message, 'id' => $message_id]);
     } else if ($data['status_code'] != 2) sb_update_conversation_status($conversation_id, 2);
 
@@ -655,19 +667,23 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
     }
     if (isset($payload['human-takeover']) || isset($payload['disable-bot'])) {
         $messages = sb_dialogflow_human_takeover($conversation_id, $extra && isset($extra['source']));
-        if ($extra && isset($extra['source'])) {
-            switch ($extra['source']) {
-                case 'ig':
-                case 'fb':
-                    for ($i = 0; $i < count($messages); $i++) {
-                        sb_messenger_send_message($extra['psid'], $extra['page_id'], $messages[$i]['message'], sb_isset($messages[$i], 'attachments'), $messages[$i]['id']);
-                    }
-                    break;
-                case 'wa':
-                    for ($i = 0; $i < count($messages); $i++) {
-                        sb_whatsapp_send_message($extra['phone'], $messages[$i]['message'], sb_isset($messages[$i], 'attachments'));
-                    }
-                    break;
+        $source = sb_isset($extra, 'source');
+        if ($source) {
+            for ($i = 0; $i < count($messages); $i++) {
+                $message = $messages[$i]['message'];
+                $attachments = sb_isset($messages[$i], 'attachments');
+                switch ($extra['source']) {
+                    case 'ig':
+                    case 'fb':
+                        sb_messenger_send_message($extra['psid'], $extra['page_id'], $message, $attachments, $messages[$i]['id']);
+                        break;
+                    case 'wa':
+                        sb_whatsapp_send_message($extra['phone'], $message, $attachments);
+                        break;
+                    case 'tg':
+                        sb_telegram_send_message($extra['chat_id'], $message, $attachments);
+                        break;
+                }
             }
         }
     }
@@ -685,6 +701,9 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
             case 'wa':
                 sb_whatsapp_send_message($extra['phone'], $payload['redirect']);
                 break;
+            case 'tg':
+                sb_telegram_send_message($extra['chat_id'], $payload['redirect']);
+                break;
         }
     }
     if (isset($payload['transcript']) && $extra) {
@@ -698,6 +717,9 @@ function sb_dialogflow_payload($payload, $conversation_id, $message = false, $ex
                 break;
             case 'wa':
                 sb_whatsapp_send_message($extra['phone'], $transcript_url);
+                break;
+            case 'tg':
+                sb_telegram_send_message($extra['chat_id'], $transcript_url);
                 break;
         }
     }
@@ -975,10 +997,10 @@ function sb_dialogflow_intent_box() { ?>
         <div class="sb-input-setting sb-type-text sb-first">
             <input type="text" />
         </div>
-        <div class="sb-title">
+        <div class="sb-title sb-bot-response">
             <?php sb_e('Response from the bot') ?>
         </div>
-        <div class="sb-input-setting sb-type-textarea">
+        <div class="sb-input-setting sb-type-textarea sb-bot-response">
             <textarea></textarea>
         </div>
         <div class="sb-title">
