@@ -1979,7 +1979,10 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
  */
 
  function sb_assign_conversation_to_agent_from_bot($conversation_id, $payload) {
-    if (isset($payload) && is_array($payload) && array_key_exists("human-takeover", $payload) && $payload["human-takeover"] == true) {
+    if (isset($payload) && is_array($payload) 
+    && ((array_key_exists("human-takeover", $payload) && $payload["human-takeover"] == true)
+    || (array_key_exists("queryResult", $payload) && array_key_exists("parameters", $payload['queryResult']) && array_key_exists("human", $payload['queryResult']['parameters']) && $payload['queryResult']['parameters']['human'] == true))
+    ) {
         $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
         if (!$agent_id) {
             sb_update_conversation_agent($conversation_id, 'routing');
@@ -1988,12 +1991,6 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
 }
 
 function sb_send_message($sender_id, $conversation_id, $message = '', $attachments = [], $conversation_status_code = -1, $payload = false, $queue = false, $recipient_id = false) {
-    // print_r($payload);
-    // compare payload if contains [human-takeover] => 1
-    // call the sb_routing and assign the agent if agent is not already assigned
-    // change status to 6
-    // once assign stop bot for futher communication
-    // for the supportboard doc for this point
     $pusher = sb_pusher_active();
     $sender_id = sb_db_escape($sender_id);
     $conversation_id = sb_db_escape($conversation_id);
@@ -2005,11 +2002,6 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
         
         // check for human-takeover of conversation
         sb_assign_conversation_to_agent_from_bot($conversation_id, $payload);
-        print_r($message . " = " . $conversation_status_code . "\n");
-        // if (isset($payload) && is_array($payload) && array_key_exists("human-takeover", $payload) && $payload["human-takeover"] == true) {
-        //     return;
-        // }
-
         $attachments_json = '';
         $security = sb_is_agent();
         $attachments = sb_json_array($attachments);
@@ -2023,11 +2015,6 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
         $is_human_takeover_active = $is_dialogflow_active && sb_dialogflow_is_human_takeover($conversation_id);
         $is_human_takeover = $is_dialogflow_active && sb_get_multi_setting('dialogflow-human-takeover', 'dialogflow-human-takeover-active') && !$is_human_takeover_active;
         $last_agent = false;
-
-        // if agent is assign to conversation then remove the dialogflow answer
-        // if (sb_isset_num($conversation['agent_id']) && isset($payload) && is_array($payload) && array_key_exists("responseId", $payload)) {
-        //     return;
-        // }
 
         if ($is_sender_agent && !$is_sender_bot && $is_dialogflow_active && !$is_human_takeover_active) {
             sb_send_message(sb_get_bot_id(), $conversation_id, '', [], false, ['human-takeover' => true]);
@@ -2080,7 +2067,6 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
                     $conversation_status_code = sb_isset_num($conversation['status_code']) == 8 ? $conversation['status_code'] : $conversation_status_code;
                 }
                 if ($conversation_status_code != $conversation['status_code']) {
-                    print_r('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
                     sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
                 }
             }
