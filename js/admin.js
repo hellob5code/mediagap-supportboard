@@ -2670,6 +2670,11 @@
                                         if (select_status_code == 0 && status == 6 || select_status_code == 6 && status == 2 || select_status_code in [0, 6] && status == 8) {
                                             conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
                                         }
+                                        if (select_status_code == 0 && status == 6) {
+                                            setTimeout(function () {
+                                                location.reload();
+                                            }, 1000);
+                                        }
                                     } else {
                                         scroll_to_conversation = true;
                                     }
