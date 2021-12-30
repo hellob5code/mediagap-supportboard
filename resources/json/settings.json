@@ -73,12 +73,6 @@
       "content": "Disable auto-initialization of the chat widget. When this setting is active you must initialize the chat widget with a custom JavaScript API code written by you. If the chat doesn't appear and this setting is enabled, disable it."
     },
     {
-      "type": "checkbox",
-      "id": "stop-conversations",
-      "title": "Stop conversations",
-      "content": "Hide conversations from the admin area which has last message as 'STOP' or 'stop'."
-    },
-    {
       "type": "multi-input",
       "id": "dynamic-handoff",
       "title": "Dynamic Handoff",

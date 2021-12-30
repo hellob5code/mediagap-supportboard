@@ -1418,22 +1418,7 @@ function sb_get_conversations_users($conversations) {
             }
         }
     }
-    return sb_remove_stop_conversations($conversations);
-}
-
-function sb_remove_stop_conversations($conversations) {
-    $is_stop_conversations = sb_get_setting('stop-conversations');
-    if($is_stop_conversations) {
-        $filter_conversations = [];
-        for ($i = 0; $i < count($conversations); $i++) {
-            if(trim(strtolower($conversations[$i]['message'])) !== "stop") {
-                array_push($filter_conversations, $conversations[$i]);
-            }
-        }
-        return $filter_conversations;
-    } else {
-        return $conversations;
-    }
+    return $conversations;
 }
 
 function sb_get_conversations($pagination = 0, $status_code = 0, $routing = false, $routing_unassigned = false) {
@@ -1516,7 +1501,7 @@ function sb_search_user_conversations($search, $user_id = false) {
 
 function sb_new_conversation($user_id, $status_code = 0, $title = '', $department = -1, $agent_id = -1, $source = false, $extra = false) {
     if (!sb_isset_num($agent_id) && sb_get_setting('routing')) {
-        $agent_id = sb_routing(-1, $department);
+        // $agent_id = sb_routing(-1, $department);
     } else if (sb_isset_num($agent_id)) {
         if (defined('SB_AECOMMERCE')) {
             $agent_id = sb_aecommerce_get_agent_id($agent_id);
@@ -1621,7 +1606,7 @@ function sb_update_conversation_agent($conversation_id, $agent_id, $message = fa
     if (sb_conversation_security_error($conversation_id)) return new SBError('security-error', 'sb_update_conversation_agent');
     $conversation_id = sb_db_escape($conversation_id);
     $result = sb_db_get('SELECT status_code, department FROM sb_conversations WHERE id = ' . $conversation_id);
-    if ($agent_id == 'routing' || $agent_id == 'routing-unassigned') $agent_id = sb_routing(false, isset($result['department']), $agent_id == 'routing-unassigned');
+    if ($agent_id == 'routing' || $agent_id == 'routing-unassigned') $agent_id = sb_routing(false, $result['department'], $agent_id == 'routing-unassigned');
     $empty_agent_id = empty($agent_id);
     if (!$empty_agent_id && !in_array(sb_isset(sb_db_get('SELECT user_type FROM sb_users WHERE id = ' . sb_db_escape($agent_id)), 'user_type'), ['agent', 'admin'])) {
         return new SBError('not-an-agent', 'sb_update_conversation_agent');
@@ -1993,6 +1978,18 @@ function sb_routing($conversation_id = false, $department = false, $unassigned =
  *
  */
 
+ function sb_assign_conversation_to_agent_from_bot($conversation_id, $payload) {
+    if (isset($payload) && is_array($payload) 
+    && ((array_key_exists("human-takeover", $payload) && $payload["human-takeover"] == true)
+    || (array_key_exists("queryResult", $payload) && array_key_exists("parameters", $payload['queryResult']) && array_key_exists("human", $payload['queryResult']['parameters']) && $payload['queryResult']['parameters']['human'] == true))
+    ) {
+        $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE id = ' . $conversation_id), 'agent_id');
+        if (!$agent_id) {
+            sb_update_conversation_agent($conversation_id, 'routing');
+        }
+    }
+}
+
 function sb_send_message($sender_id, $conversation_id, $message = '', $attachments = [], $conversation_status_code = -1, $payload = false, $queue = false, $recipient_id = false) {
     $pusher = sb_pusher_active();
     $sender_id = sb_db_escape($sender_id);
@@ -2002,6 +1999,9 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
         $sender_id = sb_get_active_user_ID();
     } else $sender_id = sb_db_escape($sender_id);
     if ($sender_id != -1) {
+        
+        // check for human-takeover of conversation
+        sb_assign_conversation_to_agent_from_bot($conversation_id, $payload);
         $attachments_json = '';
         $security = sb_is_agent();
         $attachments = sb_json_array($attachments);
@@ -2062,11 +2062,13 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
             // Conversation status code
             if ($conversation_status_code != 'skip') {
                 if ($conversation_status_code == -1 || $conversation_status_code === false || !in_array($conversation_status_code, [0, 1, 2, 3, 4, 6, 7, 8])) {
-                    $conversation_status_code = $is_sender_agent && !$is_sender_bot ? 1 : ($is_human_takeover ? 1 : 2);
+                    $conversation_status_code = $is_sender_agent && !$is_sender_bot ? 1 : ($is_human_takeover ? 1 : 6);
                     $conversation_status_code = sb_isset_num($conversation['agent_id']) ? 6 : $conversation_status_code;
                     $conversation_status_code = sb_isset_num($conversation['status_code']) == 8 ? $conversation['status_code'] : $conversation_status_code;
                 }
-                if ($conversation_status_code != $conversation['status_code']) sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
+                if ($conversation_status_code != $conversation['status_code']) {
+                    sb_db_query('UPDATE sb_conversations SET status_code = ' . sb_db_escape($conversation_status_code) . ' WHERE id = ' . $conversation_id);
+                }
             }
 
             if (sb_is_error($response)) return $response;
@@ -2917,14 +2919,8 @@ function sb_save_settings($settings, $external_settings = [], $external_settings
             // Update bot
             sb_update_bot($settings['bot-name'][0], $settings['bot-image'][0]);
             
-            // Check whether stop-conversations flag changed or not
-            $stop_conversation = false;
-            if($SB_SETTINGS['stop-conversations'][0] !== filter_var($settings['stop-conversations'][0], FILTER_VALIDATE_BOOLEAN)) {
-                $stop_conversation = true;
-            }
-            
             $SB_SETTINGS = $settings;
-            return $stop_conversation ? "STOP_CONVERSATIONS_UPDATE" : true;
+            return true;
         } else {
             return new SBError('json-encode-error', 'sb_save_settings');
         }

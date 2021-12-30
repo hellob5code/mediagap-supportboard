@@ -931,17 +931,8 @@
                         external_settings: external_settings,
                         external_settings_translations: this.translations.translations
                     }, (response) => {
-                        if (response == "STOP_CONVERSATIONS_UPDATE") {
-                            showResponse('Settings saved! Page reload in progress...');
-                            $(btn).sbLoading(false);
-                            setTimeout(function () {
-                                // window.location.href = "/admin.php";
-                                window.location.reload();
-                            }, 1000);
-                        } else {
-                            showResponse('Settings saved');
-                            $(btn).sbLoading(false);
-                        }
+                        showResponse('Settings saved');
+                        $(btn).sbLoading(false);
                     });
                     break;
             }
@@ -2678,6 +2669,11 @@
                                         conversations_area.find('.sb-top [data-value="read"]').sbActivate(status == 2 || status == 6);
                                         if (select_status_code == 0 && status == 6 || select_status_code == 6 && status == 2 || select_status_code in [0, 6] && status == 8) {
                                             conversations_admin_list_ul.find(`[data-conversation-id="${conversation_id}"]`).remove();
+                                        }
+                                        if (select_status_code == 0 && status == 6) {
+                                            setTimeout(function () {
+                                                location.reload();
+                                            }, 1000);
                                         }
                                     } else {
                                         scroll_to_conversation = true;
