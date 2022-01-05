@@ -41,6 +41,7 @@
     var users_pagination_count = 1;
     var profile_box;
     var profile_edit_box;
+    var delete_agent_box;
 
     // Settings
     var settings_area;
@@ -2250,9 +2251,89 @@
             }
             users_table_menu.find(`[data-type="all"] span`).html(`(${count})`).attr('data-count', count);
         },
+        
+        // Assign agent conversation to another agent
+        assignAgentConversations: function (from_agent_id, to_agent_id) {
+            loadingGlobal();
+            SBF.ajax({
+                function: 'assign-conversations-from-agent-to-agent',
+                from_agent_id: from_agent_id,
+                to_agent_id: to_agent_id
+            }, (response) => {
+                loadingGlobal(false);
+                if (response) {
+                    admin.sbHideLightbox();
+                    SBUsers.delete([from_agent_id], true);
+                }
+                admin.sbHideLightbox();
+            });
+        },
+
+        // Delete a agent
+        deleteAgent: function (user_id) {
+            loadingGlobal();
+            SBF.ajax({
+                function: 'get-users',
+                user_types: ['agent', 'admin'],
+                extra: SBUsers.table_extra
+            }, (response) => {
+                let agents = delete_agent_box.find('.sb-table-users');
+                let code = '';
+                let agentName = '';
+                let count = response.length;
+                if (count) {
+                    for (var i = 0; i < count; i++) {
+                        if (response[i]['id'] != user_id) {
+                            code += `<tr data-deleted-agent-id="${user_id}" data-user-id="${response[i]['id']}" data-user-type="${response[i]['user_type']}"><td><input type="checkbox" style="border-radius: 20px;" /></td><td class="sb-td-profile"><a class="sb-profile"><img src="${response[i]['profile_image']}" /><span>${response[i]['first_name'] + ' ' + response[i]['last_name']}</span></a></td><td class="sb-td-email">${response[i]['email']}</td><td class="sb-td-ut">${response[i]['user_type']}</td></tr>`;
+                        } else {
+                            agentName = response[i]['first_name'] + ' ' + response[i]['last_name'];
+                        }
+                    }
+                } else {
+                    code = `<p class="sb-no-results">${sb_('No users found.')}</p>`;
+                }
+                agents.find('tbody').html(code);
+                loadingGlobal(false);
+                
+                $(agents).on('click', 'th:first-child', function () {
+                    $(this).parent().toggleClass('sb-active');
+                });
+                // Checkbox selector
+                $(agents).on('click', 'th :checkbox', function () {
+                    agents.find('td :checkbox').prop('checked', $(this).prop('checked'));
+                });
+
+                $(agents).on('click', ':checkbox', function(e) {
+                    agents.find('td :checkbox').each(function() {
+                      if (this != e.target)
+                        $(this).prop('checked', false);
+                    });
+                });
+                let dialogTitle = delete_agent_box.find('.sb-top-bar .sb-dialog-title');
+                dialogTitle.html("Select agent to assign " + agentName + "'s chats");
+                
+                delete_agent_box.sbShowLightbox();
+
+                $(delete_agent_box).on('click', '.sb-save', function () {
+                    let isChecked = false;
+                    delete_agent_box.find('tr').each(function () {
+                        if ($(this).find('td input[type="checkbox"]').is(':checked')) {
+                            $(this).find('td input[type="checkbox"]').prop('checked', false);
+                            let fromAgentId = $(this).attr('data-deleted-agent-id');
+                            let toAgentId = $(this).attr('data-user-id');
+                            isChecked = true;
+                            SBUsers.assignAgentConversations(fromAgentId, toAgentId);
+                        }
+                    });
+                    if (!isChecked) {
+                        showResponse('No agent selected!!!');
+                    }
+                });
+            });
+        },
 
         // Delete a user
-        delete: function (user_ids) {
+        delete: function (user_ids, is_agent=false) {
             this.loading();
             if (Array.isArray(user_ids)) {
                 if (SB_ADMIN_SETTINGS.cloud) {
@@ -2271,7 +2352,8 @@
                     if (users_table.find('[data-user-id]').length == 0) {
                         this.filter(users_table_menu.find('.sb-active').data('type'));
                     }
-                    showResponse('Users deleted');
+                    let success_message = is_agent ? 'User deleted and Conversations assigned successfully.' : 'Users deleted';
+                    showResponse(success_message);
                     this.updateMenu();
                     this.loading(false);
                 });
@@ -3467,6 +3549,7 @@
         users_table_menu = users_area.find('.sb-menu-users');
         profile_box = admin.find('.sb-profile-box');
         profile_edit_box = admin.find('.sb-profile-edit-box');
+        delete_agent_box = admin.find('.sb-delete-agent-box');
         settings_area = admin.find('.sb-area-settings');
         automations_area = settings_area.find('.sb-automations-area');
         conditions_area = automations_area.find('.sb-conditions');
@@ -4665,9 +4748,13 @@
 
         // Delete user button
         $(profile_edit_box).on('click', '.sb-delete', function () {
-            dialog('This user will be deleted permanently including all linked data, conversations, and messages.', 'alert', function () {
-                SBUsers.delete(activeUser().id);
-            });
+            if (activeUser().type == "agent" || activeUser().type == "admin") {
+                SBUsers.deleteAgent(activeUser().id);
+            } else {
+                dialog('This user will be deleted permanently including all linked data, conversations, and messages.', 'alert', function () {
+                    SBUsers.delete(activeUser().id);
+                });
+            }
         });
 
         // Display user box
@@ -4794,11 +4881,26 @@
                     SBUsers.csv();
                     break;
                 case 'delete':
-                    dialog('All selected users will be deleted permanently including all linked data, conversations, and messages.', 'alert', () => {
-                        SBUsers.delete(user_ids);
+                    let isAgent = false;
+                    for (var i = 0; i < user_ids.length; i++) {
+                        let row = users_table.find(`[data-user-id="${user_ids[i]}"]`);
+                        if (['agent', 'admin'].includes(row.attr('data-user-type'))) {
+                            isAgent = true;
+                        }
+                    }
+                    if (isAgent && user_ids.length > 1) {
+                        showResponse('Please select one agent or admin at a time to delete.');
+                    } else if (isAgent) {
+                        SBUsers.deleteAgent(user_ids[0]);
                         $(this).hide();
                         users_table.find('th:first-child input').prop('checked', false);
-                    });
+                    } else {
+                        dialog('All selected users will be deleted permanently including all linked data, conversations, and messages.', 'alert', () => {
+                            SBUsers.delete(user_ids);
+                            $(this).hide();
+                            users_table.find('th:first-child input').prop('checked', false);
+                        });
+                    }
                     break;
             }
         });

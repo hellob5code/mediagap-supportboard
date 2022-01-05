@@ -206,6 +206,58 @@ function sb_profile_edit_box() { ?>
         </div>
     </div>
 <?php } ?>
+
+<?php
+
+/*
+ * ----------------------------------------------------------
+ * DELETE AGENT BOX
+ * ----------------------------------------------------------
+ *
+ * Delete agent area used in admin side
+ *
+ */
+
+function sb_delete_agent_box() { ?>
+    <div class="sb-delete-agent-box sb-lightbox">
+        <div class="sb-info"></div>
+        <div class="sb-top-bar">
+            <div class="sb-dialog-title">
+                Select agent from below list
+            </div>
+            <div>
+                <a class="sb-save sb-btn sb-icon">
+                    <i class="sb-icon-check"></i><?php sb_e('Save changes') ?>
+                </a>
+                <a class="sb-close sb-btn-icon" data-button="toggle" data-hide="sb-profile-area" data-show="sb-table-area">
+                    <i class="sb-icon-close"></i>
+                </a>
+            </div>
+        </div>
+        <div class="sb-main sb-scroll-area" style="height: 300px;">
+            <table class="sb-table sb-table-users" style="table-layout: auto;">
+                <thead>
+                    <tr>
+                        <th>
+                            <!-- <input type="checkbox" name="delete_user_checkbox" /> -->
+                        </th>
+                        <th data-field="first_name">
+                            <?php sb_e('Full name') ?>
+                        </th>
+                        <th data-field="email">
+                            <?php sb_e('Email') ?>
+                        </th>
+                        <th data-field="user_type">
+                            <?php sb_e('Type') ?>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+<?php } ?>
+
 <?php
 
 /*
@@ -261,6 +313,7 @@ function sb_login_box() { ?>
         }(jQuery)); 
     </script>
 <?php } ?>
+
 <?php
 
 /*
@@ -1257,6 +1310,7 @@ function sb_component_admin() {
 
                   sb_profile_box();
                   sb_profile_edit_box();
+                  sb_delete_agent_box();
                   sb_dialog();
                   sb_direct_message_box();
                   if (defined('SB_DIALOGFLOW')) sb_dialogflow_intent_box();

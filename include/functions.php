@@ -1632,6 +1632,16 @@ function sb_update_conversation_agent($conversation_id, $agent_id, $message = fa
     return new SBError('agent-update-error', 'sb_update_conversation_agent', $response);
 }
 
+function sb_assign_conversations_from_agent_to_agent($from_agent_id, $to_agent_id) {
+    $from_agent_id = sb_db_escape($from_agent_id);
+    $to_agent_id = sb_db_escape($to_agent_id);
+    $response = sb_db_query('UPDATE sb_conversations SET agent_id = ' . $to_agent_id . ' WHERE agent_id = '. $from_agent_id);
+    if ($response) {
+        return true;
+    }
+    return new SBError('agent-update-error', 'sb_assign_conversations_from_agent_to_agent', $response);
+}
+
 function sb_update_conversation_event($payload_event, $conversation_id, $message_preview = false) {
     sb_db_query('INSERT INTO sb_messages(user_id, message, creation_time, status_code, attachments, payload, conversation_id) VALUES (' . sb_get_active_user_ID() . ', "", "' . gmdate('Y-m-d H:i:s') . '", 0, "", "{\"event\": \"' . sb_db_escape($payload_event) . '\"' . ($message_preview ? ', \"preview\": \"' .  str_replace('"', '\\\"', sb_db_escape($message_preview)) . '\"' : '') . '}", ' . sb_db_escape($conversation_id) . ')');
     if (sb_pusher_active()) sb_pusher_trigger('agents', 'update-conversations', ['conversation_id' => $conversation_id]);
