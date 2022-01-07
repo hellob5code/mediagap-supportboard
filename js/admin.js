@@ -3809,66 +3809,66 @@
         });
 
         $(admin).on('click', '.sb-updates-box .sb-update', function () {
-            if (loading(this)) return;
-            let box = admin.find('.sb-updates-box');
-            SBF.ajax({
-                function: 'update',
-                domain: SB_URL
-            }, (response) => {
-                let error = '';
-                if (SBF.errorValidation(response, 'envato-purchase-code-not-found')) {
-                    error = 'Please go to Settings > Miscellaneous and insert the Envato Purchase Code of Support Board.'
-                } else if (SBF.errorValidation(response)) {
-                    error = SBF.slugToString(response[1]);
-                } else {
-                    let success = true;
-                    for (var key in response) {
-                        if (response[key] != 'success') {
-                            success = false;
-                            break;
-                        }
-                    }
-                    if (!success) {
-                        error = JSON.stringify(response);
-                    }
-                }
-                if (error == '') {
-                    clearCache();
-                    showResponse('Update completed.');
-                    location.reload();
-                } else {
-                    SBForm.showErrorMessage(box, error);
-                }
-                $(this).sbLoading(false);
-            });
+            // // if (loading(this)) return;
+            // let box = admin.find('.sb-updates-box');
+            // SBF.ajax({
+            //     function: 'update',
+            //     domain: SB_URL
+            // }, (response) => {
+            //     let error = '';
+            //     if (SBF.errorValidation(response, 'envato-purchase-code-not-found')) {
+            //         error = 'Please go to Settings > Miscellaneous and insert the Envato Purchase Code of Support Board.'
+            //     } else if (SBF.errorValidation(response)) {
+            //         error = SBF.slugToString(response[1]);
+            //     } else {
+            //         let success = true;
+            //         for (var key in response) {
+            //             if (response[key] != 'success') {
+            //                 success = false;
+            //                 break;
+            //             }
+            //         }
+            //         if (!success) {
+            //             error = JSON.stringify(response);
+            //         }
+            //     }
+            //     if (error == '') {
+            //         clearCache();
+            //         showResponse('Update completed.');
+            //         location.reload();
+            //     } else {
+            //         SBForm.showErrorMessage(box, error);
+            //     }
+            //     $(this).sbLoading(false);
+            // });
         });
 
         setTimeout(function () {
-            let last = SBF.storage('last-update-check');
-            let today_arr = [today.getMonth(), today.getDate()];
-            if (SB_ADMIN_SETTINGS.cloud) return;
-            if (last == false || today_arr[0] != last[0] || (today_arr[1] > (last[1] + 10))) {
-                SBF.storage('last-update-check', today_arr);
-                if (SB_ADMIN_SETTINGS['auto-updates']) {
-                    SBF.ajax({
-                        function: 'update',
-                        domain: SB_URL
-                    }, (response) => {
-                        if (typeof response !== 'string' && !Array.isArray(response)) {
-                            showResponse('Automatic update completed. Reload the admin area to apply the update.');
-                            clearCache();
-                        }
-                    });
-                } else if (SB_ACTIVE_AGENT['user_type'] == 'admin') {
-                    SBF.ajax({
-                        function: 'updates-available'
-                    }, (response) => {
-                        if (response === true) {
-                            showResponse(`${sb_('Update available.')} <span onclick="$(\'.sb-version\').click()">${sb_('Click here to update now')}</span>`, 'info');
-                        }
-                    });
-                }
-            }
+            // let last = SBF.storage('last-update-check');
+            // let today_arr = [today.getMonth(), today.getDate()];
+            // if (SB_ADMIN_SETTINGS.cloud) return;
+            // if (last == false || today_arr[0] != last[0] || (today_arr[1] > (last[1] + 10))) {
+            //     SBF.storage('last-update-check', today_arr);
+                // if (SB_ADMIN_SETTINGS['auto-updates']) {
+                //     SBF.ajax({
+                //         function: 'update',
+                //         domain: SB_URL
+                //     }, (response) => {
+                //         if (typeof response !== 'string' && !Array.isArray(response)) {
+                //             showResponse('Automatic update completed. Reload the admin area to apply the update.');
+                //             clearCache();
+                //         }
+                //     });
+                // } else if (SB_ACTIVE_AGENT['user_type'] == 'admin') {
+                //     SBF.ajax({
+                //         function: 'updates-available'
+                //     }, (response) => {
+                //         if (response === true) {
+                //             showResponse(`${sb_('Update available.')} <span onclick="$(\'.sb-version\').click()">${sb_('Click here to update now')}</span>`, 'info');
+                //         }
+                //     });
+                // }
+            // }
         }, 1000);
 
         // Apps
