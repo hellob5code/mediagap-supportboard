@@ -26,15 +26,15 @@ function sb_init() {
             $agent_id = sb_routing(-1, $department, false, $value['agent_id']);
             
             if (sb_isset_num($agent_id) && sb_isset_num($value['id'])) {
-                $message = sb_isset(sb_db_get('select message from sb_messages where conversation_id = '. $value['id'] .' and message != "" ORDER BY id DESC LIMIT 1'), 'message');
-                $message = trim(preg_replace('/\s\s+/', ' ', $message));
+                // $message = sb_isset(sb_db_get('select message from sb_messages where conversation_id = '. $value['id'] .' and message != "" ORDER BY id DESC LIMIT 1'), 'message');
+                // $message = trim(preg_replace('/\s\s+/', ' ', $message));
             
                 $header = ['Content-Type: application/x-www-form-urlencoded'];
                 $query = [
                     'function' => 'update-conversation-agent',
                     'conversation_id' => $value['id'],
                     'agent_id' => $agent_id,
-                    'message' => $message,
+                    'message' => 'Yes',
                     'user_id' => $value['user_id'],
                     'language' => false,
                     'login-cookie' => 'OVNsY0wxeVAyRWVNWEtjbmQvNjdBcFpBcmNSN29RMVVGRTIzSGdBUmVCS1hkT2ZyWkVoZVNIdlNVRkZ1OWdzdjM4ais5cE9RSzZNTk8vUEZpOXI4amRiRERjYlJnbGlYeUd0dGxGV2pLdy9JNUIyT1AzMVZ5b2oyazEvSUdDaXBiTER3UmJudXVHR04wS0I5V2kzWUo3MUdUY0JlNWoyUmp1enNQbVZDeWdFTkhmYXdBSFpERXFCc0VVeDV6RW9iaVFLKzBuUVNuT04zSGhpWldGODFRdEY2ckhOWFZwVkFGYnY3UW1NWkEzNlI2eFVaaVNGUUhBdlNqcFNvdVFVTWR2QmJCUGhmY1B2UkU2Ny9hNVJwQ3ZMdTBlL25zWnpNcWplVXE3YnZ0WEx4QUxaOHd3WExSRnowV0FGaC93NnJBTTFHaGtGY056S3hHRGh5MVhkNnNIVERKeituMTVJVnVHRENoWmpPU05KN1YrT3JHaFZlUGVUbm9kN2NHOTZVTUhnSjBEUWZoeVBCQm9wTXozOERVVzdtQW9zU3lENkRhYkhGOXk4ZWRJTDNOR3AwNkNkS2h4VDdNM1U0SnNteVh3SzRFNjdTQkRGdkJVWXRFYVllSWNwTjhiZGppQ3pkNlZaWGVCM1FKWEU9'
