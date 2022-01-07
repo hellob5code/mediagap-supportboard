@@ -30,7 +30,7 @@ function sb_sms_get_historical_data($to, $from, $messaging_service_sid, $latest_
     // $responseTo = [];
     $responseTo = array_map(function($value) {
         $object = new stdClass();
-        $object->user_id = 1;
+        $object->user_id = 2;
         $object->body = $value['body'];
         if ($value['date_sent']) {
             $object->date_sent = gmdate('Y-m-d H:i:s', strtotime($value['date_sent']));
