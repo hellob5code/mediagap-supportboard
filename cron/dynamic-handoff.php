@@ -55,7 +55,7 @@ function sb_init() {
 }
 
 function sb_get_unassigned_conversations($minute, $count, $department) {
-    $conversations = sb_db_get('SELECT sb_conversations.id, sb_conversations.user_id, sb_conversations.agent_id, sb_conversations.dynamic_handoff_count FROM sb_conversations inner join sb_messages ON sb_conversations.id = sb_messages.conversation_id WHERE sb_conversations.status_code IN(0, 1, 2, 6) AND sb_conversations.source = "sm" AND sb_conversations.dynamic_handoff_count < ' . $count . ' AND sb_conversations.department = ' . $department . ' AND sb_messages.id IN ( SELECT max(sb_messages.id) FROM sb_messages WHERE sb_messages.creation_time < (utc_timestamp() - INTERVAL '. $minute .' MINUTE) group by sb_messages.conversation_id) ORDER BY sb_conversations.id DESC', false);
+    $conversations = sb_db_get('SELECT sb_conversations.id, sb_conversations.user_id, sb_conversations.agent_id, sb_conversations.dynamic_handoff_count FROM sb_conversations INNER JOIN sb_messages ON sb_conversations.id = sb_messages.conversation_id WHERE sb_conversations.status_code IN(0, 1, 2, 6) AND sb_conversations.source = "sm" AND sb_conversations.dynamic_handoff_count < ' . $count . ' AND sb_conversations.department = ' . $department . ' AND sb_messages.id IN (SELECT MAX(sb_messages.id) FROM sb_messages inner join sb_users ON sb_messages.user_id = sb_users.id WHERE sb_messages.creation_time < (UTC_TIMESTAMP() - INTERVAL '. $minute .' MINUTE) AND sb_users.user_type not in ("admin", "agent") GROUP BY sb_messages.conversation_id) ORDER BY sb_conversations.id DESC', false);
     return $conversations;
 }
 
