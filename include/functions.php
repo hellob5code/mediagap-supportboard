@@ -1782,7 +1782,7 @@ function sb_is_active_conversation_busy($conversation_id, $skip = -1) {
 
 function sb_count_conversations($status_code = false, $user_type = false, $agent_id = false) {
     if ($user_type == 'agent' && $agent_id) {
-        return sb_isset(sb_db_get('SELECT COUNT(*) AS count FROM sb_conversations WHERE' . ($status_code ? ' status_code = ' . sb_db_escape($status_code) : '') . ' and agent_id = ' . sb_db_escape($agent_id)), 'count'); 
+        return sb_isset(sb_db_get('SELECT COUNT(*) AS count FROM sb_conversations WHERE' . ($status_code ? ' status_code = ' . sb_db_escape($status_code) . ' and': '') . ' agent_id = ' . sb_db_escape($agent_id)), 'count'); 
     } else {
         return sb_isset(sb_db_get('SELECT COUNT(*) AS count FROM sb_conversations' . ($status_code ? ' WHERE status_code = ' . sb_db_escape($status_code) : '')), 'count');
     }
