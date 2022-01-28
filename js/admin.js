@@ -2871,7 +2871,9 @@
                 this.menu_count_ajax = true;
                 SBF.ajax({
                     function: 'count-conversations',
-                    status_code: status == 0 ? 2 : status
+                    status_code: status == 0 ? 2 : status,
+                    user_type: SB_ACTIVE_AGENT['user_type'],
+                    agent_id: SB_ACTIVE_AGENT['id']
                 }, (response) => {
                     span.html(`(${response})`);
                 });

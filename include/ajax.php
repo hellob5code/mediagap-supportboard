@@ -362,7 +362,7 @@ switch ($_POST['function']) {
     case 'get-agents-in-conversation':
         die(sb_json_response(sb_get_agents_in_conversation($_POST['conversation_id'])));
     case 'count-conversations':
-        die(sb_json_response(sb_count_conversations(sb_post('status_code'))));
+        die(sb_json_response(sb_count_conversations(sb_post('status_code'), sb_post('user_type'), sb_post('agent_id'))));
     case 'updates-available':
         die(sb_json_response(sb_updates_available()));
     case 'google-translate':
