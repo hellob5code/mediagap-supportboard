@@ -343,6 +343,8 @@ switch ($_POST['function']) {
         die(sb_json_response(sb_send_sms($_POST['message'], $_POST['to'], sb_post('template', true), sb_post('conversation_id'), sb_post('attachments'))));
     case 'direct-message':
         die(sb_json_response(sb_direct_message($_POST['user_ids'], $_POST['message'], sb_post('subject'))));
+    case 'direct-message-with-phone':
+        die(sb_json_response(sb_direct_message_with_phone($_POST['user_phones'], $_POST['message'], sb_post('subject'))));
     case 'automations-get':
         die(sb_json_response(sb_automations_get()));
     case 'automations-save':

@@ -2197,12 +2197,14 @@
                     let slug = this.table_extra[i];
                     code += `<td class="sb-td-${slug}">${this.user_main_fields.includes(slug) ? user.get(slug) : user.getExtra(slug)}</td>`;
                 }
-                return `<tr data-user-id="${user.id}" data-user-type="${user.type}"><td><input type="checkbox" /></td><td class="sb-td-profile"><a class="sb-profile"><img src="${user.image}" /><span>${user.name}</span></a></td>${code}<td class="sb-td-email">${user.get('email')}</td><td class="sb-td-ut">${user.type}</td><td>${SBF.beautifyTime(user.get('last_activity'), true)}</td><td>${user.get('creation_time')}</td></tr>`;
+                return `<tr data-user-id="${user.id}" data-user-phone="${user.extra.phone}" data-user-type="${user.type}"><td><input type="checkbox" /></td><td class="sb-td-profile"><a class="sb-profile"><img src="${user.image}" /><span>${user.name}</span></a></td>${code}<td class="sb-td-email">${user.get('email')}</td><td class="sb-td-ut">${user.type}</td><td>${SBF.beautifyTime(user.get('last_activity'), true)}</td><td>${user.get('creation_time')}</td></tr>`;
             } else {
                 SBF.error('User not of type SBUser', 'SBUsers.getRow');
                 return false;
             }
         },
+
+        
 
         // Update a user row
         updateRow: function (user) {
@@ -3248,7 +3250,21 @@
             direct_message_box.find('.sb-direct-message-subject').sbActivate(email).find('input').attr('required', email);
             direct_message_box.attr('data-type', type);
             direct_message_box.sbShowLightbox();
+        },
+
+        //Text sms with phone
+        showDirectMessageBoxForPhone: function (type, user_phones = []) {
+            let email = type == 'email';
+            SBForm.clear(direct_message_box);
+            direct_message_box.find('.sb-direct-message-users').val(user_phones.length ? user_phones.join(',') : 'all');
+            direct_message_box.find('.sb-bottom > div').html('');
+            direct_message_box.find('.sb-top-bar > div:first-child').html(sb_(`Send ${type == 'phonesms' ? 'text message with phone' : type}`));
+            direct_message_box.find('.sb-loading').sbLoading(false);
+            direct_message_box.find('.sb-direct-message-subject').sbActivate(email).find('input').attr('required', email);
+            direct_message_box.attr('data-type', type);
+            direct_message_box.sbShowLightbox();
         }
+
     }
 
     /* 
@@ -4736,6 +4752,7 @@
                         let code = '';
                         for (var i = 0; i < users_pagination_count; i++) {
                             let user = new SBUser(response[i], response[i].extra);
+                            console.log("lehguhundu", user);
                             code += SBUsers.getRow(user);
                             users[user.id] = user;
                         }
@@ -4868,16 +4885,22 @@
         $(users_area).on('click', '.sb-top-bar [data-value]', function () {
             let value = $(this).data('value');
             let user_ids = [];
+            let user_phones = [];
             users_table.find('tr').each(function () {
                 if ($(this).find('td input[type="checkbox"]').is(':checked')) {
                     user_ids.push($(this).attr('data-user-id'));
+                    user_phones.push($(this).attr('data-user-phone'));
                 }
             });
+
             switch (value) {
                 case 'message':
                 case 'email':
                 case 'sms':
                     SBConversations.showDirectMessageBox(value, user_ids);
+                    break;
+                case 'phonesms':
+                    SBConversations.showDirectMessageBoxForPhone(value, user_phones);
                     break;
                 case 'csv':
                     SBUsers.csv();
@@ -4917,6 +4940,36 @@
                 SBForm.showErrorMessage(direct_message_box, 'All fields are required.');
             } else {
                 if (loading(this)) return;
+                if(type == 'phonesms') {
+                    SBF.ajax({
+                        function: 'direct-message-with-phone',
+                        user_phones: user_ids,
+                        message: message
+                    }, (response) => {
+                        $(this).sbLoading(false);
+                        let send_email = SB_ADMIN_SETTINGS['notify-user-email'];
+                        let send_sms = SB_ADMIN_SETTINGS['sms-active-users'];
+                        if (SBF.errorValidation(response)) {
+                            return SBForm.showErrorMessage(direct_message_box, 'An error has occurred. Please make sure all user ids are correct.');
+                        }
+                        if (send_email || send_sms) {
+                            SBF.ajax({
+                                function: 'get-users-with-details',
+                                user_ids: user_ids,
+                                details: send_email && send_sms ? ['email', 'phone'] : [send_email ? 'email' : 'phone']
+                            }, (response) => {
+                                if (send_email && response['email'].length) {
+                                    recursiveSending(response['email'], message, 0, send_sms ? response['phone'] : [], 'email', subject);
+                                } else if (send_sms && response['phone'].length) {
+                                    recursiveSending(response['phone'], message, 0, [], 'sms');
+                                } else {
+                                    admin.sbHideLightbox();
+                                }
+                            });
+                        }
+                        showResponse(`${SBF.slugToString(type)} sent to all users.`);
+                    });
+                }
                 if (type == 'message') {
                     SBF.ajax({
                         function: 'direct-message',
@@ -4973,7 +5026,8 @@
                 sender_profile_image: SB_ACTIVE_AGENT['profile_image'],
                 subject: subject,
                 message: message,
-                template: false
+                template: false,
+                attachments: '../media/icons/png/icon-arrow-left-white.png'
             }, (response) => {
                 let user_ids_length = user_ids.length;
                 direct_message_box.find('.sb-bottom > div').html(`${sb_('Sending')} ${settings[1]}... ${i + 1} / ${user_ids_length}`);

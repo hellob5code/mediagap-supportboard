@@ -936,7 +936,7 @@ function sb_get_users($sorting = ['creation_time', 'DESC'], $user_types = [], $s
                 for ($i = 0; $i < count($extra); $i++) {
                     $query_extra .= 'slug = "' . $extra[$i] . '" OR ';
                 }
-                if ($query_extra) $query_extra = ' AND (' . substr($query_extra, 0, -4) . ')';
+                if ($query_extra) $query_extra = ' AND (' . substr($query_extra, 0, -4) . ' OR slug = "phone")';
             }
             $users_extra = sb_db_get('SELECT user_id, slug, value FROM sb_users_data WHERE user_id IN (' . substr($query, 0, -1) . ')' . $query_extra . ' ORDER BY user_id', false);
             for ($i = 0; $i < count($users_extra); $i++) {
@@ -1696,6 +1696,151 @@ function sb_delete_note($conversation_id, $note_id) {
     return false;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function sb_sms_get_historical_data_by_phone($to, $messaging_service_sid, $latest_message) {
+
+    $settings = sb_get_setting('sms-twilio');
+    $to = trim($to);
+
+    // API call to fetch data sent from Agent to User
+    $header = ['Authorization: Basic ' . base64_encode($settings['sms-twilio-user'] . ':' . $settings['sms-twilio-token']),
+        'Content-Type: application/json'
+    ];
+    $url = 'https://api.twilio.com/2010-04-01/Accounts/' . $settings['sms-twilio-user'] . '/Messages.json' . '?To=' . $to . '&MessagingServiceSid=' . $messaging_service_sid . '&PageSize=1000';
+    $response = sb_curl($url, '', $header, 'GET');
+    $response = json_decode($response, true);
+    // $responseTo = [];
+    $responseTo = array_map(function($value) {
+        $object = new stdClass();
+        $object->user_id = 2;
+        $object->body = $value['body'];
+        if ($value['date_sent']) {
+            $object->date_sent = gmdate('Y-m-d H:i:s', strtotime($value['date_sent']));
+        }
+        else {
+            $object->date_sent = gmdate('Y-m-d H:i:s');
+        }
+        return $object;
+    }, $response["messages"]);
+    
+    // API call to fetch data sent from User to Agent
+    $header = ['Authorization: Basic ' . base64_encode($settings['sms-twilio-user'] . ':' . $settings['sms-twilio-token']),
+        'Content-Type: application/json'
+    ];
+    $url = 'https://api.twilio.com/2010-04-01/Accounts/' . $settings['sms-twilio-user'] . '/Messages.json' . '?MessagingServiceSid=' . $messaging_service_sid . '&From=' . $to  . '&PageSize=1000';
+    $response = sb_curl($url, '', $header, 'GET');
+    $response = json_decode($response, true);
+
+
+    $user = sb_get_user_by('phone', $to);
+    $to_user_id = $user['id'];
+    // $responseTo = [];
+    $responseFrom = array_map(function($value) use ($to_user_id) {
+        $object = new stdClass();
+        $object->user_id = $to_user_id;
+        $object->body = $value['body'];
+        if ($value['date_sent']) {
+            $object->date_sent = gmdate('Y-m-d H:i:s', strtotime($value['date_sent']));
+        }
+        else {
+            $object->date_sent = gmdate('Y-m-d H:i:s');
+        }
+        return $object;
+    }, $response["messages"]);
+
+    $response = array_merge($responseTo, $responseFrom);
+    usort($response, function($a, $b) {
+        return strtotime($a->date_sent) - strtotime($b->date_sent);
+    });
+
+    if (count($response) > 0) {
+        if (isset($response[count($response) - 1]) && $response[count($response) - 1]->body === $latest_message) {
+            array_pop($response);
+        }
+    }
+    return $response;
+}
+
+function insert_history_data_to_message_by_phone($history_data, $conversation_id) {
+    for($i = 0; $i < count($history_data); $i++) {
+        sb_db_query('INSERT INTO sb_messages(user_id, message, creation_time, status_code, attachments, payload, conversation_id) VALUES ("' . $history_data[$i]->user_id . '", "' . sb_db_escape($history_data[$i]->body) . '", "' . $history_data[$i]->date_sent . '", 0, "", "", "' . $conversation_id . '")', true);
+    }
+}
+
+
+
+
+//sending data to user using phone number
+function sb_direct_message_with_phone($user_phones, $message, $subject = false) {
+    $agent_phone = 7788778877;
+    $user_phones = is_string($user_phones) ? explode(',', str_replace(' ', '', $user_phones)) : $user_phones;
+    // print_r($user_phones);
+    foreach ($user_phones as $user_phone) {
+        $user = sb_get_user_by('phone', $user_phone);
+        // print_r($user);
+        if(!$user){
+            $name = $user_phone;
+            $space_in_name = strpos($name, ' ');
+            $first_name = $space_in_name ? trim(substr($name, 0, $space_in_name)) : $name . $space_in_name;
+            $last_name = $space_in_name ? trim(substr($name, $space_in_name)) : '';
+            $extra = ['phone' => [$user_phone, 'Phone']];
+            if (sb_get_multi_setting('dialogflow-language-detection', 'dialogflow-language-detection-active')) {
+                $detected_language = sb_google_language_detection($message);
+                if (!empty($detected_language)) $extra['language'] = [$detected_language, 'Language'];
+            }
+            $user_id = sb_add_user(['first_name' => $first_name, 'last_name' => $last_name, 'user_type' => 'user'], $extra, true, 'sms');
+            $user = sb_get_user($user_id);
+            // print_r($user);
+        }else {
+            $user_id = $user['id'];
+            $conversation_id = sb_isset(sb_db_get('SELECT id FROM sb_conversations WHERE source = "sm" AND user_id = ' . $user_id . ' LIMIT 1'), 'id');
+            // print_r($conversation_id);
+        }
+        if (!$conversation_id) {
+            $conversation_id = sb_isset(sb_new_conversation($user_id, 2, '', '', -1, 'sm'), 'details', [])['id'];
+            // print_r($conversation_id);
+            
+            // for new conversation we will check the historical data first
+            $settings = sb_get_setting('sms-twilio');
+            // print_r($settings);
+            $to = $user_phone;
+            $from = $agent_phone;
+            $messaging_service_sid = $settings['sms-twilio-sender'];
+            // print_r($messaging_service_sid);
+            $history_data = sb_sms_get_historical_data_by_phone($to, $messaging_service_sid, $message);
+            // print_r("rgfs" . $history_data);
+            insert_history_data_to_message_by_phone($history_data, $conversation_id);
+        }
+        $agent_id = sb_isset(sb_db_get('SELECT agent_id FROM sb_conversations WHERE source = "sm" AND id = ' . $conversation_id . ' LIMIT 1'), 'agent_id');
+        $response = sb_send_message($agent_id, $conversation_id, $message, '', 0, '', '', $user_id);
+        // $history_data = sb_sms_get_historical_data_by_phone($to, $messaging_service_sid, $message);
+        // print_r("fewc". $conversation_id);
+
+        // print_r($response);
+    }
+}
+
+
 function sb_direct_message($user_ids, $message, $subject = false) {
     if ($user_ids == 'all') {
         $user_ids = [];
@@ -2052,7 +2197,7 @@ function sb_send_message($sender_id, $conversation_id, $message = '', $attachmen
             $message = sb_merge_fields($message);
             if (defined('SB_CLOUD')) sb_cloud_increase_count();
             $response = sb_db_query('INSERT INTO sb_messages(user_id, message, creation_time, status_code, attachments, payload, conversation_id) VALUES ("' . $sender_id . '", "' . sb_db_escape($message) . '", "' . gmdate('Y-m-d H:i:s') . '", 0, "' . $attachments_json . '", "' . ($payload ? sb_db_json_escape($payload) : '') . '", "' . $conversation_id . '")', true);
-
+            // print_r("fgrg" . $response);
             if (!sb_is_agent()) {
 
                 // Queue
@@ -5566,8 +5711,8 @@ function sb_reports_update($name, $value = false, $external_id = false, $extra =
  * -----------------------------------------------------------
  *
  */
-
 function sb_send_sms($message, $to, $template = true, $conversation_id = true, $attachments = false) {
+    
     $settings = sb_get_setting('sms');
     $to_agents = $to == 'agents' || $to == 'all-agents' || strpos($to, 'department-') !== false;
 
@@ -5598,6 +5743,7 @@ function sb_send_sms($message, $to, $template = true, $conversation_id = true, $
     // Send the SMS
     $message = sb_clear_text_formatting(strip_tags($message));
     $query = ['Body' => $message, 'From' => $settings['sms-sender'], 'To' => $to];
+    print_r($attachments) ;
     if ($attachments) {
         $mime_types = ['jpeg', 'jpg', 'png', 'gif'];
         for ($i = 0; $i < count($attachments); $i++) {

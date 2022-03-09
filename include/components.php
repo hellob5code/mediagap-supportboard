@@ -555,7 +555,7 @@ function sb_languages_box() { ?>
  */
 
 function sb_routing_select($exclude_id = false) { 
-    $agents = sb_db_get('SELECT id, first_name, last_name FROM sb_users WHERE (user_type = "agent" OR user_type = "admin")' . ($exclude_id ? (' AND id <> ' . sb_db_escape($exclude_id)) : ''), false);
+    $agents = sb_db_get('SELECT id, first_name, last_name FROM sb_users WHERE (user_type = "agent" OR user_type = "admin")' . ($exclude_id ? (' AND id <> ' . sb_db_escape($exclude_id)) : '') . ' ORDER BY first_name ASC' , false);
     $code = '<div class="sb-inline sb-inline-agents"><h3>' . sb_('Agent') . '</h3><div id="conversation-agent" class="sb-select"><p>' . sb_('No agents assigned') . '</p><ul><li data-id="" data-value="">' . sb_('No agents assigned') . '</li>';
     for ($i = 0; $i < count($agents); $i++) {
         $code .= '<li data-id="' . $agents[$i]['id'] . '">' . $agents[$i]['first_name'] . ' ' . $agents[$i]['last_name'] . '</li>';
@@ -898,7 +898,8 @@ function sb_component_admin() {
                                         <i class="sb-icon-envelope"></i>
                                     </a>      
                                 </li>
-                                <?php if ($sms) echo '<li><a data-value="sms" class="sb-btn-icon" data-sb-tooltip="' . sb_('Send text message') . '"><i class="sb-icon-sms"></i></a><li>' ?>
+                                <?php if ($sms) echo '<li><a data-value="sms" class="sb-btn-icon" data-sb-tooltip="' . sb_('Send text message') . '"><i class="sb-icon-sms"></i></a></li>' ?>
+                                <?php  echo '<li><a data-value="phonesms" class="sb-btn-icon" data-sb-tooltip="' . sb_('Send text message with phone') . '"><i class="sb-icon-sms"></i></a></li>' ?>
                                 <li>
                                     <a data-value="delete" class="sb-btn-icon sb-btn-red" data-sb-tooltip="<?php sb_e('Delete users') ?>" style="display: none;">
                                         <i class="sb-icon-delete"></i>

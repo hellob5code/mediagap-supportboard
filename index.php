@@ -3,7 +3,7 @@
 if (isset($_GET["recordid"]))   {$recordid=$_GET["recordid"];}
 
 
-$URL = "https://supportboard.medigaplife.com/admin.php";
+$URL = "http://dev.supportboard.com/admin.php";
 //$iframe = "http://23.117.248.114/agc/vicidial.php";
 echo "<HTML>\n";
 echo "<head>\n";
